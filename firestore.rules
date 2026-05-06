@@ -41,5 +41,9 @@ service cloud.firestore {
     match /expenses/{expenseId} {
       allow read, write: if isAdmin();
     }
+
+    match /expense_categories/{categoryId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

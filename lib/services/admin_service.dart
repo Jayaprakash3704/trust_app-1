@@ -11,8 +11,7 @@ class AdminService {
   final FirebaseAuth _auth;
 
   Future<Map<String, dynamic>> createUser({
-    String? email,
-    String? existingUid,
+    required String email,
     required String name,
     required String phone,
     required String address,
@@ -32,9 +31,7 @@ class AdminService {
         'Authorization': 'Bearer $token',
       },
       body: jsonEncode({
-        if (existingUid != null && existingUid.isNotEmpty)
-          'existingUid': existingUid,
-        if (email != null && email.isNotEmpty) 'email': email,
+        'email': email,
         'name': name,
         'phone': phone,
         'address': address,

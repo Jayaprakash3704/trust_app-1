@@ -14,6 +14,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _firestoreService = FirestoreService();
   String _filter = 'month';
   DateTimeRange? _customRange;
+  bool _showHeader = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _showHeader = true);
+      }
+    });
+  }
 
   Future<void> _pickCustomRange() async {
     final now = DateTime.now();
@@ -56,6 +67,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return DateTimeRange(start: start, end: end);
   }
 
+  Widget _buildHeader() {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 400),
+      opacity: _showHeader ? 1 : 0,
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+        offset: _showHeader ? Offset.zero : const Offset(0, -0.08),
+        child: Row(
+          children: [
+            Image.asset(
+              'assets/images/app_logo.png',
+              width: 44,
+              height: 44,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Admin dashboard',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final range = _resolveRange();
@@ -65,6 +103,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _buildHeader(),
+          const SizedBox(height: 12),
           Row(
             children: [
               DropdownButton<String>(
@@ -104,43 +144,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               status: 'success',
             ),
             builder: (context, snapshot) {
+              Widget child;
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                child = const Center(
+                  key: ValueKey('loading'),
+                  child: CircularProgressIndicator(),
+                );
+              } else if (snapshot.hasError) {
+                child = const Text(
+                  'Failed to load totals.',
+                  key: ValueKey('error'),
+                );
+              } else {
+                final transactions = snapshot.data ?? [];
+                final totalDonations = transactions.fold<int>(
+                  0,
+                  (sum, tx) => sum + tx.donationAmount,
+                );
+                final totalFees = transactions.fold<int>(
+                  0,
+                  (sum, tx) => sum + tx.platformFee,
+                );
+                final totalPaid = transactions.fold<int>(
+                  0,
+                  (sum, tx) => sum + tx.totalPaid,
+                );
+
+                child = Wrap(
+                  key: ValueKey('stats-${transactions.length}'),
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _StatCard(
+                      label: 'Total donations',
+                      value: formatInr(totalDonations),
+                    ),
+                    _StatCard(label: 'Total fees', value: formatInr(totalFees)),
+                    _StatCard(label: 'Total paid', value: formatInr(totalPaid)),
+                    _StatCard(
+                      label: 'Successful transactions',
+                      value: transactions.length.toString(),
+                    ),
+                  ],
+                );
               }
 
-              if (snapshot.hasError) {
-                return const Text('Failed to load totals.');
-              }
-
-              final transactions = snapshot.data ?? [];
-              final totalDonations = transactions.fold<int>(
-                0,
-                (sum, tx) => sum + tx.donationAmount,
-              );
-              final totalFees = transactions.fold<int>(
-                0,
-                (sum, tx) => sum + tx.platformFee,
-              );
-              final totalPaid = transactions.fold<int>(
-                0,
-                (sum, tx) => sum + tx.totalPaid,
-              );
-
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _StatCard(
-                    label: 'Total donations',
-                    value: formatInr(totalDonations),
-                  ),
-                  _StatCard(label: 'Total fees', value: formatInr(totalFees)),
-                  _StatCard(label: 'Total paid', value: formatInr(totalPaid)),
-                  _StatCard(
-                    label: 'Successful transactions',
-                    value: transactions.length.toString(),
-                  ),
-                ],
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) {
+                  final offset = Tween<Offset>(
+                    begin: const Offset(0, 0.04),
+                    end: Offset.zero,
+                  ).animate(animation);
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: offset, child: child),
+                  );
+                },
+                child: child,
               );
             },
           ),

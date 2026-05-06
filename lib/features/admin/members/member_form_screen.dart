@@ -18,12 +18,42 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
   String _role = 'user';
 
   final _emailController = TextEditingController();
-  final _existingUidController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _aadhaarController = TextEditingController();
   final _panController = TextEditingController();
+
+  Widget _buildStatus() {
+    Widget child = const SizedBox.shrink();
+    if (_error != null) {
+      child = Text(
+        _error!,
+        key: const ValueKey('error'),
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      );
+    } else if (_result != null) {
+      child = SelectableText(
+        'Reset link: $_result',
+        key: const ValueKey('result'),
+      );
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      transitionBuilder: (child, animation) {
+        final offset = Tween<Offset>(
+          begin: const Offset(0, 0.08),
+          end: Offset.zero,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: offset, child: child),
+        );
+      },
+      child: child,
+    );
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
@@ -38,12 +68,7 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
 
     try {
       final response = await _adminService.createUser(
-        email: _emailController.text.trim().isEmpty
-            ? null
-            : _emailController.text.trim(),
-        existingUid: _existingUidController.text.trim().isEmpty
-            ? null
-            : _existingUidController.text.trim(),
+        email: _emailController.text.trim(),
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
         address: _addressController.text.trim(),
@@ -69,7 +94,6 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
   @override
   void dispose() {
     _emailController.dispose();
-    _existingUidController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
@@ -90,9 +114,6 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
               controller: _emailController,
               decoration: const InputDecoration(labelText: 'Email'),
               validator: (value) {
-                if (_existingUidController.text.trim().isNotEmpty) {
-                  return null;
-                }
                 if (value == null || value.isEmpty) {
                   return 'Required';
                 }
@@ -101,12 +122,6 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
                 }
                 return null;
               },
-            ),
-            TextFormField(
-              controller: _existingUidController,
-              decoration: const InputDecoration(
-                labelText: 'Existing UID (Google sign-in)',
-              ),
             ),
             TextFormField(
               controller: _nameController,
@@ -152,12 +167,7 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
               decoration: const InputDecoration(labelText: 'Role'),
             ),
             const SizedBox(height: 16),
-            if (_error != null)
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            if (_result != null) SelectableText('Reset link: $_result'),
+            _buildStatus(),
             const SizedBox(height: 12),
             FilledButton(
               onPressed: _busy ? null : _submit,

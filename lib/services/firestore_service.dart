@@ -102,6 +102,19 @@ class FirestoreService {
         });
   }
 
+  Stream<List<String>> watchExpenseCategories() {
+    return _firestore
+        .collection('expense_categories')
+        .orderBy('nameLower')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => (doc.data()['name'] ?? '').toString().trim())
+              .where((name) => name.isNotEmpty)
+              .toList();
+        });
+  }
+
   Future<void> addExpense({
     required int amountPaise,
     required String description,
@@ -120,8 +133,32 @@ class FirestoreService {
     });
   }
 
+  Future<void> addExpenseCategory({
+    required String name,
+    required String createdBy,
+  }) async {
+    final trimmedName = name.trim();
+    final normalizedName = _normalizeCategoryName(trimmedName);
+    final docId = _categoryId(normalizedName);
+
+    await _firestore.collection('expense_categories').doc(docId).set({
+      'name': trimmedName,
+      'nameLower': normalizedName,
+      'createdBy': createdBy,
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   Future<void> deleteExpense(String expenseId) async {
     await _firestore.collection('expenses').doc(expenseId).delete();
+  }
+
+  String _normalizeCategoryName(String name) {
+    return name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  String _categoryId(String normalizedName) {
+    return normalizedName.replaceAll('/', '-');
   }
 
   Future<void> createReport({

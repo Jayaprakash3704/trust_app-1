@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
@@ -15,6 +16,26 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _busy = false;
   String? _error;
+
+  Widget _buildLogo() {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.85, end: 1),
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value.clamp(0, 1),
+          child: Transform.scale(scale: value, child: child),
+        );
+      },
+      child: Image.asset(
+        'assets/images/app_logo.png',
+        width: 140,
+        height: 140,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
 
   Future<void> _signInEmail() async {
     setState(() {
@@ -45,7 +66,17 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await _authService.signInWithGoogle();
+      await _authService.signInWithGoogle(
+        linkEmail: _emailController.text.trim(),
+        linkPassword: _passwordController.text,
+      );
+    } on FirebaseAuthException catch (error) {
+      final message = error.code == 'account-exists-with-different-credential'
+          ? 'Account exists. Sign in with email/password to link Google.'
+          : 'Google sign-in failed.';
+      setState(() {
+        _error = message;
+      });
     } catch (error) {
       setState(() {
         _error = 'Google sign-in failed.';
@@ -107,6 +138,8 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                _buildLogo(),
+                const SizedBox(height: 16),
                 TextField(
                   controller: _emailController,
                   decoration: const InputDecoration(labelText: 'Email'),
@@ -119,13 +152,28 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: true,
                 ),
                 const SizedBox(height: 12),
-                if (_error != null)
-                  Text(
-                    _error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder: (child, animation) {
+                    final offset = Tween<Offset>(
+                      begin: const Offset(0, 0.08),
+                      end: Offset.zero,
+                    ).animate(animation);
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(position: offset, child: child),
+                    );
+                  },
+                  child: _error == null
+                      ? const SizedBox.shrink()
+                      : Text(
+                          _error!,
+                          key: ValueKey(_error),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                ),
                 const SizedBox(height: 12),
                 FilledButton(
                   onPressed: _busy ? null : _signInEmail,

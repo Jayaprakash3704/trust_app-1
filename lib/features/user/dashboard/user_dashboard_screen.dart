@@ -14,12 +14,47 @@ class UserDashboardScreen extends StatefulWidget {
 
 class _UserDashboardScreenState extends State<UserDashboardScreen> {
   int _index = 0;
+  bool _showTitle = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _showTitle = true);
+      }
+    });
+  }
+
+  Widget _buildTitle(BuildContext context) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 350),
+      opacity: _showTitle ? 1 : 0,
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        offset: _showTitle ? Offset.zero : const Offset(0, -0.08),
+        child: Row(
+          children: [
+            Image.asset(
+              'assets/images/app_logo.png',
+              width: 28,
+              height: 28,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 8),
+            const Text('User Dashboard'),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('User Dashboard'),
+        title: _buildTitle(context),
         actions: [
           IconButton(
             onPressed: () => AuthService().signOut(),

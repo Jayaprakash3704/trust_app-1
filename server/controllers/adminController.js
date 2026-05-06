@@ -10,8 +10,7 @@ const {
 
 const createUserSchema = z
   .object({
-    existingUid: z.string().min(1).optional(),
-    email: z.string().email().optional(),
+    email: z.string().email(),
     name: z.string().min(1),
     phone: z.string().min(1),
     address: z.string().min(1),
@@ -19,9 +18,7 @@ const createUserSchema = z
     pan: z.string().min(6),
     role: z.enum(['admin', 'user']).default('user'),
   })
-  .refine((data) => data.existingUid || data.email, {
-    message: 'Either existingUid or email is required',
-  });
+  .strict();
 
 const updateUserSchema = z.object({
   userId: z.string().min(1),
@@ -59,23 +56,35 @@ async function createUser(req, res) {
     return res.status(400).json({ error: 'Invalid user payload' });
   }
 
-  const { existingUid, email, name, phone, address, aadhaar, pan, role } =
-    parsed.data;
+  const { email, name, phone, address, aadhaar, pan, role } = parsed.data;
   let userRecord;
   let resetLink = null;
 
-  if (existingUid) {
-    userRecord = await getAuth().getUser(existingUid);
-    await getAuth().updateUser(existingUid, { displayName: name });
-  } else {
+  try {
+    userRecord = await getAuth().getUserByEmail(email);
+    await getAuth().updateUser(userRecord.uid, { displayName: name });
+  } catch (error) {
+    if (error.code !== 'auth/user-not-found') {
+      throw error;
+    }
+
     const tempPassword = generateTempPassword();
     userRecord = await getAuth().createUser({
       email,
       password: tempPassword,
       displayName: name,
     });
-    resetLink = await getAuth().generatePasswordResetLink(email);
   }
+
+  const hasPasswordProvider = (userRecord.providerData || []).some(
+    (provider) => provider.providerId === 'password',
+  );
+  if (!hasPasswordProvider) {
+    const tempPassword = generateTempPassword();
+    await getAuth().updateUser(userRecord.uid, { password: tempPassword });
+  }
+
+  resetLink = await getAuth().generatePasswordResetLink(email);
 
   await getAuth().setCustomUserClaims(userRecord.uid, { role });
 
@@ -90,7 +99,6 @@ async function createUser(req, res) {
   });
 
   return res.json({
-    uid: userRecord.uid,
     passwordResetLink: resetLink,
   });
 }
