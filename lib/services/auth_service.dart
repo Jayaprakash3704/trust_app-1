@@ -5,6 +5,12 @@ class AuthService {
   AuthService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseAuth _auth;
+  static final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  static Future<void>? _googleSignInInit;
+
+  Future<void> _ensureGoogleSignInInitialized() {
+    return _googleSignInInit ??= _googleSignIn.initialize();
+  }
 
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
@@ -16,16 +22,24 @@ class AuthService {
     String? linkEmail,
     String? linkPassword,
   }) async {
-    final googleUser = await GoogleSignIn().signIn();
-    if (googleUser == null) {
-      throw StateError('Google sign-in cancelled');
+    await _ensureGoogleSignInInitialized();
+
+    GoogleSignInAccount googleUser;
+    try {
+      googleUser = await _googleSignIn.authenticate();
+    } on GoogleSignInException catch (error) {
+      if (error.code == GoogleSignInExceptionCode.canceled) {
+        throw StateError('Google sign-in cancelled');
+      }
+      rethrow;
     }
 
-    final googleAuth = await googleUser.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
-    );
+    final googleAuth = googleUser.authentication;
+    final idToken = googleAuth.idToken;
+    if (idToken == null || idToken.isEmpty) {
+      throw StateError('Missing Google ID token');
+    }
+    final credential = GoogleAuthProvider.credential(idToken: idToken);
 
     try {
       return await _auth.signInWithCredential(credential);
@@ -55,7 +69,8 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    await GoogleSignIn().signOut();
+    await _ensureGoogleSignInInitialized();
+    await _googleSignIn.signOut();
     await _auth.signOut();
   }
 

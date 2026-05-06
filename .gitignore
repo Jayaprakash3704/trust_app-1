@@ -55,3 +55,12 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+
+# Firebase/Google credentials
+**/google-services.json
+**/GoogleService-Info.plist
+**/serviceAccountKey.json
+**/*serviceAccount*.json
+
+# Flutter tool state
+.flutter-plugins
