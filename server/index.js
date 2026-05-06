@@ -30,6 +30,14 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Trust App API is running.',
+    endpoints: ['/health', '/payment', '/admin'],
+  });
+});
+
 app.use('/payment', paymentRoutes);
 app.use('/admin', adminRoutes);
 
