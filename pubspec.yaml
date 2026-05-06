@@ -46,7 +46,7 @@ dependencies:
   pdf: ^3.11.1
   printing: ^5.13.4
   razorpay_flutter: ^1.4.5
-  share_plus: ^13.1.0
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:

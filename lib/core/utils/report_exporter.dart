@@ -144,7 +144,5 @@ Future<void> shareTransactionsCsv({
   final file = File('${dir.path}/$title.csv');
   await file.writeAsString(buffer.toString());
 
-  await SharePlus.instance.share(
-    ShareParams(files: [XFile(file.path)], text: title),
-  );
+  await Share.shareXFiles([XFile(file.path)], text: title);
 }
