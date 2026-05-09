@@ -8,6 +8,8 @@
   --accent: #0f9d8a;
   --accent-strong: #0b6e64;
   --accent-warm: #f2b34d;
+  --accent-user: #3b6ef2;
+  --accent-user-strong: #2a4aa0;
   --border: #d7e0ea;
   --shadow: 0 30px 70px rgba(12, 27, 45, 0.12);
   --shadow-soft: 0 16px 40px rgba(12, 27, 45, 0.08);
@@ -60,6 +62,74 @@ body::after {
   max-width: 1180px;
   margin: 0 auto;
   padding: 56px 24px 96px;
+}
+
+.top-status {
+  position: fixed;
+  top: 22px;
+  right: 24px;
+  z-index: 10;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.access-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(10px);
+  color: var(--ink);
+}
+
+.access-indicator.locked {
+  background: rgba(242, 179, 77, 0.2);
+  border-color: rgba(242, 179, 77, 0.45);
+  color: #7a4a05;
+}
+
+.access-indicator.user {
+  background: rgba(59, 110, 242, 0.16);
+  border-color: rgba(59, 110, 242, 0.4);
+  color: var(--accent-user-strong);
+}
+
+.access-indicator.admin {
+  background: rgba(15, 157, 138, 0.16);
+  border-color: rgba(15, 157, 138, 0.4);
+  color: var(--accent-strong);
+}
+
+.indicator-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.indicator-text {
+  display: grid;
+}
+
+.indicator-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.access-indicator strong {
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+
+.access-indicator.locked .icon-unlocked,
+.access-indicator.user .icon-locked,
+.access-indicator.admin .icon-locked {
+  display: none;
 }
 
 .hero {
@@ -157,6 +227,11 @@ body::after {
   color: #7a4a05;
 }
 
+.status-badge.user {
+  background: rgba(59, 110, 242, 0.18);
+  color: var(--accent-user-strong);
+}
+
 .status-badge.admin {
   background: rgba(15, 157, 138, 0.18);
   color: var(--accent-strong);
@@ -204,6 +279,26 @@ body::after {
   gap: 28px;
 }
 
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-family: "Sora", "Work Sans", sans-serif;
+  font-size: 1.35rem;
+}
+
+.section-head p {
+  margin: 0;
+  color: var(--ink-soft);
+  max-width: 520px;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -228,9 +323,20 @@ body::after {
   gap: 16px;
 }
 
+.health-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
 .form {
   display: grid;
   gap: 14px;
+}
+
+.form.compact {
+  gap: 10px;
 }
 
 .form-actions {
@@ -489,6 +595,16 @@ pre[data-state="error"] {
 @media (max-width: 680px) {
   .page {
     padding: 40px 18px 72px;
+  }
+
+  .top-status {
+    position: static;
+    justify-content: flex-start;
+    margin: 12px 18px 0;
+  }
+
+  .health-grid {
+    grid-template-columns: 1fr;
   }
 
   .session-grid {

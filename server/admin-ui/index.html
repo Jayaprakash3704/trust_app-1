@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Trust Admin Console</title>
+    <title>Trust Server Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,14 +15,50 @@
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
 
+    <div class="top-status" role="status" aria-live="polite">
+      <div id="accessIndicator" class="access-indicator locked">
+        <span class="indicator-icon" aria-hidden="true">
+          <svg
+            class="icon-locked"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+            <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+          </svg>
+          <svg
+            class="icon-unlocked"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+            <path d="M8 10V7a4 4 0 0 1 7 0"></path>
+            <path d="M12 15v2"></path>
+          </svg>
+        </span>
+        <div class="indicator-text">
+          <span class="indicator-label">Access</span>
+          <strong id="accessLabel">Locked</strong>
+        </div>
+      </div>
+    </div>
+
     <div class="page">
       <header class="hero">
         <div class="hero-copy reveal">
-          <div class="badge">Trust Admin</div>
-          <h1>Admin Control Room</h1>
+          <div class="badge">Trust Server</div>
+          <h1>Server Control Room</h1>
           <p>
-            Create users, update profiles, and issue secure reset links. Every
-            action stays locked unless you are verified as an admin.
+            Run public health checks, create payments, and manage admin tasks.
+            User and admin actions stay locked until you sign in.
           </p>
           <div class="hero-meta">
             <div class="chip">
@@ -31,7 +67,7 @@
             </div>
             <div class="chip">
               API
-              <span id="apiBase">/admin</span>
+              <span id="apiBase">/payment + /admin</span>
             </div>
           </div>
         </div>
@@ -61,17 +97,40 @@
               </div>
             </div>
             <div id="sessionNote" class="panel-note">
-              Sign in to unlock admin features.
+              Sign in to unlock user and admin features.
             </div>
           </div>
         </div>
       </header>
 
       <main class="content">
-        <section class="card auth-card reveal delay-2">
+        <section class="card health-card reveal delay-2">
           <div class="card-head">
-            <h2>Admin Sign In</h2>
-            <p>Authenticate with Firebase to unlock admin actions.</p>
+            <h2>Health Checks</h2>
+            <p>Public endpoints that never require authentication.</p>
+          </div>
+          <div class="health-grid">
+            <form id="healthForm" class="form compact">
+              <div class="form-actions">
+                <button class="primary" type="submit">GET /health</button>
+                <button id="rootStatusButton" class="ghost" type="button">
+                  GET /
+                </button>
+              </div>
+            </form>
+            <div class="card-output">
+              <div class="output-head">
+                <span>Response</span>
+              </div>
+              <pre id="healthOutput">No activity yet.</pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="card auth-card reveal delay-3">
+          <div class="card-head">
+            <h2>Sign In</h2>
+            <p>Authenticate with Firebase to unlock user and admin actions.</p>
           </div>
 
           <form id="authForm" class="form">
@@ -108,8 +167,145 @@
           </div>
         </section>
 
+        <div class="section-head reveal delay-4">
+          <h2>Payment Operations</h2>
+          <p>Signed-in users can create orders and verify payments.</p>
+        </div>
+
         <section class="actions-grid">
-          <article class="card action-card reveal delay-3" data-lockable>
+          <article class="card action-card reveal delay-4" data-lock="auth">
+            <div class="card-head">
+              <h2>Create Order</h2>
+              <p>Create a payment order for a signed-in user.</p>
+            </div>
+            <form id="createOrderForm" class="form">
+              <div class="field">
+                <label for="donationAmount">Donation amount</label>
+                <input
+                  id="donationAmount"
+                  name="donationAmount"
+                  type="number"
+                  min="1"
+                  step="1"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="clientRequestId">Client request ID (optional)</label>
+                <input
+                  id="clientRequestId"
+                  name="clientRequestId"
+                  type="text"
+                  placeholder="UUID"
+                />
+              </div>
+              <button class="primary" type="submit">Create order</button>
+            </form>
+            <div class="card-output">
+              <div class="output-head">
+                <span>Response</span>
+              </div>
+              <pre id="createOrderOutput">No activity yet.</pre>
+            </div>
+            <div class="lock-overlay">
+              <h3>Sign in required</h3>
+              <p>Sign in to create orders and handle payments.</p>
+            </div>
+          </article>
+
+          <article class="card action-card reveal delay-5" data-lock="auth">
+            <div class="card-head">
+              <h2>Verify Payment</h2>
+              <p>Confirm a payment signature and mark it pending.</p>
+            </div>
+            <form id="verifyPaymentForm" class="form">
+              <div class="field">
+                <label for="verifyTransactionId">Transaction ID</label>
+                <input
+                  id="verifyTransactionId"
+                  name="transactionId"
+                  type="text"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="verifyOrderId">Razorpay Order ID</label>
+                <input
+                  id="verifyOrderId"
+                  name="razorpay_order_id"
+                  type="text"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="verifyPaymentId">Razorpay Payment ID</label>
+                <input
+                  id="verifyPaymentId"
+                  name="razorpay_payment_id"
+                  type="text"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="verifySignature">Razorpay Signature</label>
+                <input
+                  id="verifySignature"
+                  name="razorpay_signature"
+                  type="text"
+                  required
+                />
+              </div>
+              <button class="primary" type="submit">Verify payment</button>
+            </form>
+            <div class="card-output">
+              <div class="output-head">
+                <span>Response</span>
+              </div>
+              <pre id="verifyPaymentOutput">No activity yet.</pre>
+            </div>
+            <div class="lock-overlay">
+              <h3>Sign in required</h3>
+              <p>Sign in to verify payment signatures.</p>
+            </div>
+          </article>
+
+          <article class="card action-card reveal delay-6" data-lock="auth">
+            <div class="card-head">
+              <h2>Mark Payment Failed</h2>
+              <p>Record a client-side payment failure.</p>
+            </div>
+            <form id="paymentFailedForm" class="form">
+              <div class="field">
+                <label for="failedTransactionId">Transaction ID</label>
+                <input
+                  id="failedTransactionId"
+                  name="transactionId"
+                  type="text"
+                  required
+                />
+              </div>
+              <button class="primary" type="submit">Mark failed</button>
+            </form>
+            <div class="card-output">
+              <div class="output-head">
+                <span>Response</span>
+              </div>
+              <pre id="paymentFailedOutput">No activity yet.</pre>
+            </div>
+            <div class="lock-overlay">
+              <h3>Sign in required</h3>
+              <p>Sign in to record payment failures.</p>
+            </div>
+          </article>
+        </section>
+
+        <div class="section-head reveal delay-4">
+          <h2>Admin Operations</h2>
+          <p>Admins can manage users and reset credentials.</p>
+        </div>
+
+        <section class="actions-grid">
+          <article class="card action-card reveal delay-3" data-lock="admin">
             <div class="card-head">
               <h2>Create User</h2>
               <p>Provision a user and generate a password reset link.</p>
@@ -178,7 +374,7 @@
             </div>
           </article>
 
-          <article class="card action-card reveal delay-4" data-lockable>
+          <article class="card action-card reveal delay-4" data-lock="admin">
             <div class="card-head">
               <h2>Update User</h2>
               <p>Send only the fields you want to update.</p>
@@ -237,7 +433,7 @@
             </div>
           </article>
 
-          <article class="card action-card reveal delay-5" data-lockable>
+          <article class="card action-card reveal delay-5" data-lock="admin">
             <div class="card-head">
               <h2>Password Reset</h2>
               <p>Generate a reset link or send a reset email.</p>
@@ -290,10 +486,10 @@
               <p>Keep the console secure and fully verified.</p>
             </div>
             <ul class="runbook-list">
-              <li>Use an admin account created by the bootstrap script.</li>
-              <li>Only admin custom claims unlock create and update actions.</li>
+              <li>Health checks stay open without authentication.</li>
+              <li>Signed-in users can run payment operations.</li>
+              <li>Admin claims unlock user creation and updates.</li>
               <li>Reset links are returned once. Store them securely.</li>
-              <li>All PII is hashed and only last four digits are stored.</li>
             </ul>
           </div>
         </section>

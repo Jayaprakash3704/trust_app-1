@@ -18,6 +18,7 @@ const firebaseConfig = {
 };
 
 const API_BASE = "/admin";
+const PAYMENT_BASE = "/payment";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -25,29 +26,40 @@ const auth = getAuth(app);
 const ui = {
   envLabel: document.getElementById("envLabel"),
   apiBase: document.getElementById("apiBase"),
+  accessIndicator: document.getElementById("accessIndicator"),
+  accessLabel: document.getElementById("accessLabel"),
   accessBadge: document.getElementById("accessBadge"),
   sessionState: document.getElementById("sessionState"),
   sessionEmail: document.getElementById("sessionEmail"),
   sessionUid: document.getElementById("sessionUid"),
   sessionRole: document.getElementById("sessionRole"),
   sessionNote: document.getElementById("sessionNote"),
+  healthForm: document.getElementById("healthForm"),
+  rootStatusButton: document.getElementById("rootStatusButton"),
+  healthOutput: document.getElementById("healthOutput"),
   authForm: document.getElementById("authForm"),
   authEmail: document.getElementById("authEmail"),
   authPassword: document.getElementById("authPassword"),
   signOutButton: document.getElementById("signOutButton"),
   authMessage: document.getElementById("authMessage"),
+  createOrderForm: document.getElementById("createOrderForm"),
+  verifyPaymentForm: document.getElementById("verifyPaymentForm"),
+  paymentFailedForm: document.getElementById("paymentFailedForm"),
   createUserForm: document.getElementById("createUserForm"),
   updateUserForm: document.getElementById("updateUserForm"),
   resetLinkForm: document.getElementById("resetLinkForm"),
   resetEmail: document.getElementById("resetEmail"),
   sendResetEmailButton: document.getElementById("sendResetEmailButton"),
+  createOrderOutput: document.getElementById("createOrderOutput"),
+  verifyPaymentOutput: document.getElementById("verifyPaymentOutput"),
+  paymentFailedOutput: document.getElementById("paymentFailedOutput"),
   createUserOutput: document.getElementById("createUserOutput"),
   updateUserOutput: document.getElementById("updateUserOutput"),
   resetLinkOutput: document.getElementById("resetLinkOutput"),
   toast: document.getElementById("toast"),
 };
 
-const lockCards = Array.from(document.querySelectorAll("[data-lockable]"));
+const lockCards = Array.from(document.querySelectorAll("[data-lock]"));
 
 const state = {
   user: null,
@@ -73,42 +85,78 @@ function showToast(message) {
   }, 2800);
 }
 
-function setAccessBadge(isAdmin) {
-  ui.accessBadge.textContent = isAdmin ? "Admin" : "Locked";
-  ui.accessBadge.classList.toggle("admin", isAdmin);
-  ui.accessBadge.classList.toggle("locked", !isAdmin);
+function getAccessLevel(user, isAdmin) {
+  if (!user) {
+    return "locked";
+  }
+  return isAdmin ? "admin" : "user";
+}
+
+function resolveAccessLabel(level) {
+  if (level === "admin") {
+    return "Admin";
+  }
+  if (level === "user") {
+    return "User";
+  }
+  return "Locked";
+}
+
+function setAccessBadge(level) {
+  const label = resolveAccessLabel(level);
+  ui.accessBadge.textContent = label;
+  ui.accessBadge.classList.toggle("admin", level === "admin");
+  ui.accessBadge.classList.toggle("user", level === "user");
+  ui.accessBadge.classList.toggle("locked", level === "locked");
+}
+
+function setAccessIndicator(level) {
+  const label = resolveAccessLabel(level);
+  ui.accessLabel.textContent = label;
+  ui.accessIndicator.classList.remove("locked", "user", "admin");
+  ui.accessIndicator.classList.add(level);
+  ui.accessIndicator.setAttribute("aria-label", `${label} access`);
+}
+
+function setActionLock(level) {
+  lockCards.forEach((card) => {
+    const lockMode = card.dataset.lock;
+    const locked =
+      lockMode === "admin"
+        ? level !== "admin"
+        : lockMode === "auth"
+          ? level === "locked"
+          : false;
+
+    card.classList.toggle("is-locked", locked);
+    card.setAttribute("aria-disabled", locked ? "true" : "false");
+    card.querySelectorAll("input, textarea, button").forEach((el) => {
+      el.disabled = locked;
+    });
+  });
 }
 
 function setSessionDisplay(user, isAdmin) {
+  const level = getAccessLevel(user, isAdmin);
   ui.sessionState.textContent = user ? "Signed in" : "Signed out";
   ui.sessionEmail.textContent = user?.email || "-";
   ui.sessionUid.textContent = user?.uid || "-";
   ui.sessionRole.textContent = user ? (isAdmin ? "admin" : "user") : "-";
-  setAccessBadge(isAdmin);
+  setAccessBadge(level);
+  setAccessIndicator(level);
+  setActionLock(level);
 
   if (!user) {
-    ui.sessionNote.textContent = "Sign in to unlock admin features.";
+    ui.sessionNote.textContent = "Sign in to unlock user and admin features.";
   } else if (!isAdmin) {
     ui.sessionNote.textContent =
-      "Account is not admin. Admin features remain locked.";
+      "Signed in as a user. Admin features remain locked.";
   } else {
     ui.sessionNote.textContent = "Admin access verified.";
   }
 
   ui.signOutButton.disabled = !user;
   ui.authForm.classList.toggle("hidden", Boolean(user));
-}
-
-function setActionLock(locked) {
-  lockCards.forEach((card) => {
-    card.classList.toggle("is-locked", locked);
-    card.setAttribute("aria-disabled", locked ? "true" : "false");
-    card
-      .querySelectorAll("input, textarea, button[type=submit]")
-      .forEach((el) => {
-        el.disabled = locked;
-      });
-  });
 }
 
 function resolveOutputText(payload, ok) {
@@ -123,6 +171,10 @@ function resolveOutputText(payload, ok) {
   }
   if (payload.error) {
     return payload.error;
+  }
+  const keys = Object.keys(payload);
+  if (keys.length > 1) {
+    return JSON.stringify(payload, null, 2);
   }
   if (payload.status) {
     return payload.status;
@@ -154,7 +206,6 @@ async function refreshSession(user) {
   state.token = tokenResult.token;
   state.isAdmin = tokenResult.claims?.role === "admin";
   setSessionDisplay(user, state.isAdmin);
-  setActionLock(!state.isAdmin);
 }
 
 async function getAuthToken() {
@@ -164,6 +215,28 @@ async function getAuthToken() {
   }
   state.token = await user.getIdToken(true);
   return state.token;
+}
+
+async function parseResponse(response) {
+  const rawText = await response.text();
+  if (!rawText) {
+    return {};
+  }
+  try {
+    return JSON.parse(rawText);
+  } catch (error) {
+    return rawText;
+  }
+}
+
+function resolveErrorMessage(data) {
+  if (!data) {
+    return "Request failed.";
+  }
+  if (typeof data === "string" && data.trim()) {
+    return data;
+  }
+  return data.error || "Request failed.";
 }
 
 async function callAdmin(endpoint, payload) {
@@ -180,23 +253,42 @@ async function callAdmin(endpoint, payload) {
     body: JSON.stringify(payload),
   });
 
-  const rawText = await response.text();
-  let data = {};
-  if (rawText) {
-    try {
-      data = JSON.parse(rawText);
-    } catch (error) {
-      data = rawText;
-    }
-  }
-
+  const data = await parseResponse(response);
   if (!response.ok) {
-    if (typeof data === "string" && data.trim()) {
-      throw new Error(data);
-    }
-    throw new Error(data.error || "Request failed.");
+    throw new Error(resolveErrorMessage(data));
   }
 
+  return data;
+}
+
+async function callPayment(endpoint, payload) {
+  if (!state.user) {
+    throw new Error("Sign in required.");
+  }
+  const token = await getAuthToken();
+  const response = await fetch(`${PAYMENT_BASE}${endpoint}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await parseResponse(response);
+  if (!response.ok) {
+    throw new Error(resolveErrorMessage(data));
+  }
+
+  return data;
+}
+
+async function callPublic(endpoint) {
+  const response = await fetch(endpoint, { method: "GET" });
+  const data = await parseResponse(response);
+  if (!response.ok) {
+    throw new Error(resolveErrorMessage(data));
+  }
   return data;
 }
 
@@ -208,9 +300,8 @@ function setBusy(form, busy) {
 }
 
 ui.envLabel.textContent = location.hostname || "local";
-ui.apiBase.textContent = API_BASE;
+ui.apiBase.textContent = "/payment + /admin";
 setSessionDisplay(null, false);
-setActionLock(true);
 ui.signOutButton.disabled = true;
 
 onAuthStateChanged(auth, async (user) => {
@@ -219,7 +310,6 @@ onAuthStateChanged(auth, async (user) => {
     state.isAdmin = false;
     state.token = null;
     setSessionDisplay(null, false);
-    setActionLock(true);
     return;
   }
 
@@ -227,9 +317,8 @@ onAuthStateChanged(auth, async (user) => {
     await refreshSession(user);
     setAuthMessage("Signed in.", "success");
   } catch (error) {
-    setAuthMessage("Unable to verify admin claims.", "error");
+    setAuthMessage("Unable to verify auth claims.", "error");
     setSessionDisplay(user, false);
-    setActionLock(true);
   }
 });
 
@@ -253,6 +342,119 @@ ui.signOutButton.addEventListener("click", async () => {
     showToast("Signed out");
   } catch (error) {
     setAuthMessage("Unable to sign out.", "error");
+  }
+});
+
+ui.healthForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setBusy(ui.healthForm, true);
+  try {
+    const data = await callPublic("/health");
+    setOutput(ui.healthOutput, data, true);
+    showToast("Health check ok.");
+  } catch (error) {
+    setOutput(ui.healthOutput, { error: error.message }, false);
+    showToast(error.message);
+  } finally {
+    setBusy(ui.healthForm, false);
+  }
+});
+
+ui.rootStatusButton.addEventListener("click", async () => {
+  setBusy(ui.healthForm, true);
+  try {
+    const data = await callPublic("/");
+    setOutput(ui.healthOutput, data, true);
+    showToast("Root status ok.");
+  } catch (error) {
+    setOutput(ui.healthOutput, { error: error.message }, false);
+    showToast(error.message);
+  } finally {
+    setBusy(ui.healthForm, false);
+  }
+});
+
+ui.createOrderForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.user) {
+    showToast("Sign in required.");
+    return;
+  }
+
+  const form = event.currentTarget;
+  const donationAmount = Number(form.donationAmount.value);
+  if (!Number.isFinite(donationAmount) || donationAmount <= 0) {
+    setOutput(ui.createOrderOutput, { error: "Enter a valid amount." }, false);
+    showToast("Enter a valid amount.");
+    return;
+  }
+
+  setBusy(form, true);
+  try {
+    const payload = { donationAmount };
+    const clientRequestId = form.clientRequestId.value.trim();
+    if (clientRequestId) {
+      payload.clientRequestId = clientRequestId;
+    }
+    const data = await callPayment("/create-order", payload);
+    setOutput(ui.createOrderOutput, data, true);
+    showToast("Order created.");
+  } catch (error) {
+    setOutput(ui.createOrderOutput, { error: error.message }, false);
+    showToast(error.message);
+  } finally {
+    setBusy(form, false);
+  }
+});
+
+ui.verifyPaymentForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.user) {
+    showToast("Sign in required.");
+    return;
+  }
+
+  const form = event.currentTarget;
+  setBusy(form, true);
+  try {
+    const payload = {
+      transactionId: form.transactionId.value.trim(),
+      razorpay_order_id: form.razorpay_order_id.value.trim(),
+      razorpay_payment_id: form.razorpay_payment_id.value.trim(),
+      razorpay_signature: form.razorpay_signature.value.trim(),
+    };
+    const data = await callPayment("/verify-payment", payload);
+    setOutput(ui.verifyPaymentOutput, data, true);
+    showToast("Payment verified.");
+  } catch (error) {
+    setOutput(ui.verifyPaymentOutput, { error: error.message }, false);
+    showToast(error.message);
+  } finally {
+    setBusy(form, false);
+  }
+});
+
+ui.paymentFailedForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.user) {
+    showToast("Sign in required.");
+    return;
+  }
+
+  const form = event.currentTarget;
+  setBusy(form, true);
+  try {
+    const payload = {
+      transactionId: form.transactionId.value.trim(),
+    };
+    const data = await callPayment("/payment-failed", payload);
+    setOutput(ui.paymentFailedOutput, data, true);
+    showToast("Payment flagged as failed.");
+  } catch (error) {
+    setOutput(ui.paymentFailedOutput, { error: error.message }, false);
+    showToast(error.message);
+  } finally {
+    setBusy(form, false);
   }
 });
 
