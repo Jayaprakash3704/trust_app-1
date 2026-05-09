@@ -1,13 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 import '../admin/dashboard/admin_shell.dart';
 import '../user/dashboard/user_dashboard_screen.dart';
 import 'login_screen.dart';
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  static const String _missingProfileMessage =
+      'No account exists for this sign-in. Please contact the admin.';
+  final _authService = AuthService();
+  String? _loginBannerMessage;
+  bool _requestedSignOut = false;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +34,8 @@ class AuthGate extends StatelessWidget {
 
         final user = snapshot.data;
         if (user == null) {
-          return const LoginScreen();
+          _requestedSignOut = false;
+          return LoginScreen(bannerMessage: _loginBannerMessage);
         }
 
         return StreamBuilder(
@@ -36,10 +49,18 @@ class AuthGate extends StatelessWidget {
 
             final appUser = userSnapshot.data;
             if (appUser == null) {
-              return const Scaffold(
-                body: Center(child: Text('Profile not found. Contact admin.')),
-              );
+              _loginBannerMessage ??= _missingProfileMessage;
+              if (!_requestedSignOut) {
+                _requestedSignOut = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _authService.signOut();
+                });
+              }
+              return LoginScreen(bannerMessage: _loginBannerMessage);
             }
+
+            _loginBannerMessage = null;
+            _requestedSignOut = false;
 
             if (appUser.role == 'admin') {
               return const AdminShell();

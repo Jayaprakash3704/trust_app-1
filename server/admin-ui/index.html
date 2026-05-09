@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trust Admin Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Work+Sans:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <div class="page">
+      <header class="hero">
+        <div class="hero-copy reveal">
+          <div class="badge">Trust Admin</div>
+          <h1>Admin Control Room</h1>
+          <p>
+            Create users, update profiles, and issue secure reset links. Every
+            action stays locked unless you are verified as an admin.
+          </p>
+          <div class="hero-meta">
+            <div class="chip">
+              Environment
+              <span id="envLabel">Server</span>
+            </div>
+            <div class="chip">
+              API
+              <span id="apiBase">/admin</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-panel reveal delay-1">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h2>Session</h2>
+              <span id="accessBadge" class="status-badge locked">Locked</span>
+            </div>
+            <div class="session-grid">
+              <div>
+                <span class="label">State</span>
+                <strong id="sessionState">Signed out</strong>
+              </div>
+              <div>
+                <span class="label">Email</span>
+                <strong id="sessionEmail">-</strong>
+              </div>
+              <div>
+                <span class="label">UID</span>
+                <strong id="sessionUid">-</strong>
+              </div>
+              <div>
+                <span class="label">Role</span>
+                <strong id="sessionRole">-</strong>
+              </div>
+            </div>
+            <div id="sessionNote" class="panel-note">
+              Sign in to unlock admin features.
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="card auth-card reveal delay-2">
+          <div class="card-head">
+            <h2>Admin Sign In</h2>
+            <p>Authenticate with Firebase to unlock admin actions.</p>
+          </div>
+
+          <form id="authForm" class="form">
+            <div class="field">
+              <label for="authEmail">Email</label>
+              <input
+                id="authEmail"
+                name="email"
+                type="email"
+                placeholder="admin@trustapp.org"
+                autocomplete="username"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="authPassword">Password</label>
+              <input
+                id="authPassword"
+                name="password"
+                type="password"
+                placeholder="Enter your password"
+                autocomplete="current-password"
+                required
+              />
+            </div>
+            <button class="primary" type="submit">Sign in</button>
+          </form>
+
+          <div class="auth-actions">
+            <button id="signOutButton" class="ghost" type="button">
+              Sign out
+            </button>
+            <span id="authMessage" class="message"></span>
+          </div>
+        </section>
+
+        <section class="actions-grid">
+          <article class="card action-card reveal delay-3" data-lockable>
+            <div class="card-head">
+              <h2>Create User</h2>
+              <p>Provision a user and generate a password reset link.</p>
+            </div>
+            <form id="createUserForm" class="form">
+              <div class="field">
+                <label for="createEmail">Email</label>
+                <input id="createEmail" name="email" type="email" required />
+              </div>
+              <div class="field">
+                <label for="createName">Full name</label>
+                <input id="createName" name="name" type="text" required />
+              </div>
+              <div class="field">
+                <label for="createPhone">Phone</label>
+                <input id="createPhone" name="phone" type="text" required />
+              </div>
+              <div class="field">
+                <label for="createAddress">Address</label>
+                <textarea
+                  id="createAddress"
+                  name="address"
+                  rows="2"
+                  required
+                ></textarea>
+              </div>
+              <div class="field">
+                <label for="createAadhaar">Aadhaar</label>
+                <input
+                  id="createAadhaar"
+                  name="aadhaar"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="12"
+                  pattern="\d{12}"
+                  autocomplete="off"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="createPan">PAN</label>
+                <input
+                  id="createPan"
+                  name="pan"
+                  type="text"
+                  maxlength="10"
+                  pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]"
+                  autocomplete="off"
+                  required
+                />
+              </div>
+              <button class="primary" type="submit">Create user</button>
+            </form>
+            <div class="card-output">
+              <div class="output-head">
+                <span>Response</span>
+                <button class="ghost small" type="button" data-copy="createUserOutput">
+                  Copy link
+                </button>
+              </div>
+              <pre id="createUserOutput">No activity yet.</pre>
+            </div>
+            <div class="lock-overlay">
+              <h3>Admin access required</h3>
+              <p>Sign in with an admin account to unlock this action.</p>
+            </div>
+          </article>
+
+          <article class="card action-card reveal delay-4" data-lockable>
+            <div class="card-head">
+              <h2>Update User</h2>
+              <p>Send only the fields you want to update.</p>
+            </div>
+            <form id="updateUserForm" class="form">
+              <div class="field">
+                <label for="updateUserId">User ID</label>
+                <input id="updateUserId" name="userId" type="text" required />
+              </div>
+              <div class="field">
+                <label for="updateName">Full name</label>
+                <input id="updateName" name="name" type="text" />
+              </div>
+              <div class="field">
+                <label for="updatePhone">Phone</label>
+                <input id="updatePhone" name="phone" type="text" />
+              </div>
+              <div class="field">
+                <label for="updateAddress">Address</label>
+                <textarea id="updateAddress" name="address" rows="2"></textarea>
+              </div>
+              <div class="field">
+                <label for="updateAadhaar">Aadhaar</label>
+                <input
+                  id="updateAadhaar"
+                  name="aadhaar"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="12"
+                  pattern="\d{12}"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="field">
+                <label for="updatePan">PAN</label>
+                <input
+                  id="updatePan"
+                  name="pan"
+                  type="text"
+                  maxlength="10"
+                  pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]"
+                  autocomplete="off"
+                />
+              </div>
+              <button class="primary" type="submit">Update user</button>
+            </form>
+            <div class="card-output">
+              <div class="output-head">
+                <span>Response</span>
+              </div>
+              <pre id="updateUserOutput">No activity yet.</pre>
+            </div>
+            <div class="lock-overlay">
+              <h3>Admin access required</h3>
+              <p>Sign in with an admin account to unlock this action.</p>
+            </div>
+          </article>
+
+          <article class="card action-card reveal delay-5" data-lockable>
+            <div class="card-head">
+              <h2>Password Reset</h2>
+              <p>Generate a reset link or send a reset email.</p>
+            </div>
+            <form id="resetLinkForm" class="form">
+              <div class="field">
+                <label for="resetUserId">User ID</label>
+                <input id="resetUserId" name="userId" type="text" />
+              </div>
+              <div class="field">
+                <label for="resetEmail">User Email (for reset mail)</label>
+                <input
+                  id="resetEmail"
+                  name="email"
+                  type="email"
+                  placeholder="user@trustapp.org"
+                />
+              </div>
+              <div class="form-actions">
+                <button class="primary" type="submit">Create reset link</button>
+                <button
+                  id="sendResetEmailButton"
+                  class="ghost"
+                  type="button"
+                >
+                  Send reset email
+                </button>
+              </div>
+            </form>
+            <div class="card-output">
+              <div class="output-head">
+                <span>Response</span>
+                <button class="ghost small" type="button" data-copy="resetLinkOutput">
+                  Copy link
+                </button>
+              </div>
+              <pre id="resetLinkOutput">No activity yet.</pre>
+            </div>
+            <div class="lock-overlay">
+              <h3>Admin access required</h3>
+              <p>Sign in with an admin account to unlock this action.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="runbook reveal delay-6">
+          <div class="card">
+            <div class="card-head">
+              <h2>Runbook</h2>
+              <p>Keep the console secure and fully verified.</p>
+            </div>
+            <ul class="runbook-list">
+              <li>Use an admin account created by the bootstrap script.</li>
+              <li>Only admin custom claims unlock create and update actions.</li>
+              <li>Reset links are returned once. Store them securely.</li>
+              <li>All PII is hashed and only last four digits are stored.</li>
+            </ul>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

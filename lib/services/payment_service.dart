@@ -12,6 +12,7 @@ class PaymentService {
 
   Future<Map<String, dynamic>> createOrder({
     required int donationAmount,
+    String? clientRequestId,
   }) async {
     final token = await _auth.currentUser?.getIdToken();
     if (token == null) {
@@ -24,7 +25,10 @@ class PaymentService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({'donationAmount': donationAmount}),
+      body: jsonEncode({
+        'donationAmount': donationAmount,
+        if (clientRequestId != null) 'clientRequestId': clientRequestId,
+      }),
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -38,7 +42,7 @@ class PaymentService {
     await http.get(Uri.parse('${AppConfig.backendBaseUrl}/health'));
   }
 
-  Future<void> verifyPayment({
+  Future<String> verifyPayment({
     required String transactionId,
     required String razorpayOrderId,
     required String razorpayPaymentId,
@@ -66,6 +70,17 @@ class PaymentService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('Verify payment failed: ${response.body}');
     }
+
+    if (response.body.isEmpty) {
+      return 'unknown';
+    }
+
+    final payload = jsonDecode(response.body);
+    if (payload is Map && payload['status'] is String) {
+      return payload['status'] as String;
+    }
+
+    return 'unknown';
   }
 
   Future<void> markPaymentFailed({required String transactionId}) async {

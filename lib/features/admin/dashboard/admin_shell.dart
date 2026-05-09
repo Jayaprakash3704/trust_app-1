@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../members/member_form_screen.dart';
+import '../members/members_screen.dart';
 import '../reports/reports_screen.dart';
 import '../transactions/transactions_screen.dart';
 import '../expenses/expenses_screen.dart';
+import '../../../core/widgets/app_watermark.dart';
 import '../../../services/auth_service.dart';
 import 'admin_dashboard_screen.dart';
 
@@ -29,14 +30,19 @@ class _AdminShellState extends State<AdminShell> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _index,
-        children: const [
-          AdminDashboardScreen(),
-          MemberFormScreen(),
-          TransactionsScreen(),
-          ExpensesScreen(),
-          ReportsScreen(),
+      body: Stack(
+        children: [
+          const AppWatermark(),
+          IndexedStack(
+            index: _index,
+            children: const [
+              AdminDashboardScreen(),
+              MembersScreen(),
+              TransactionsScreen(),
+              ExpensesScreen(),
+              ReportsScreen(),
+            ],
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(

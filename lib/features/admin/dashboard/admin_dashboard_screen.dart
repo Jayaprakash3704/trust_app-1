@@ -207,13 +207,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
           const SizedBox(height: 16),
           FutureBuilder(
-            future: _firestoreService.fetchUserCount(),
+            future: _firestoreService.fetchMemberCount(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SizedBox.shrink();
               }
               final count = snapshot.data ?? 0;
-              return Text('Total users: $count');
+              return Text('Total members: $count');
             },
           ),
         ],

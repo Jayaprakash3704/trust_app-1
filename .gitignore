@@ -57,6 +57,7 @@ pnpm-debug.log*
 !.env.example
 
 # Firebase/Google credentials
+.firebase/
 **/google-services.json
 **/GoogleService-Info.plist
 **/serviceAccountKey.json

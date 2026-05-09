@@ -10,6 +10,12 @@ class FirestoreService {
 
   final FirebaseFirestore _firestore;
 
+  List<DonationTransaction> _filterVisibleTransactions(
+    List<DonationTransaction> transactions,
+  ) {
+    return transactions.where((tx) => tx.status != 'created').toList();
+  }
+
   Stream<AppUser?> watchUser(String uid) {
     return _firestore.collection('users').doc(uid).snapshots().map((doc) {
       if (!doc.exists) {
@@ -19,6 +25,25 @@ class FirestoreService {
     });
   }
 
+  Future<AppUser?> fetchUser(String uid) async {
+    final doc = await _firestore.collection('users').doc(uid).get();
+    if (!doc.exists) {
+      return null;
+    }
+    return AppUser.fromMap(doc.id, doc.data() ?? {});
+  }
+
+  Future<void> updateUserMonthlyBasic({
+    required String uid,
+    required int amountPaise,
+    required int dayOfMonth,
+  }) async {
+    await _firestore.collection('users').doc(uid).set({
+      'monthlyBasicAmount': amountPaise,
+      'monthlyBasicDay': dayOfMonth,
+    }, SetOptions(merge: true));
+  }
+
   Stream<List<DonationTransaction>> watchUserTransactions(String uid) {
     return _firestore
         .collection('transactions')
@@ -26,9 +51,10 @@ class FirestoreService {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
+          final transactions = snapshot.docs
               .map((doc) => DonationTransaction.fromMap(doc.id, doc.data()))
               .toList();
+          return _filterVisibleTransactions(transactions);
         });
   }
 
@@ -38,9 +64,10 @@ class FirestoreService {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
+          final transactions = snapshot.docs
               .map((doc) => DonationTransaction.fromMap(doc.id, doc.data()))
               .toList();
+          return _filterVisibleTransactions(transactions);
         });
   }
 
@@ -56,6 +83,14 @@ class FirestoreService {
 
   Future<int> fetchUserCount() async {
     final snapshot = await _firestore.collection('users').get();
+    return snapshot.size;
+  }
+
+  Future<int> fetchMemberCount() async {
+    final snapshot = await _firestore
+        .collection('users')
+        .where('role', isEqualTo: 'user')
+        .get();
     return snapshot.size;
   }
 
@@ -85,8 +120,70 @@ class FirestoreService {
     query = query.orderBy('timestamp', descending: true);
 
     final snapshot = await query.get();
-    return snapshot.docs
+    final transactions = snapshot.docs
         .map((doc) => DonationTransaction.fromMap(doc.id, doc.data()))
+        .toList();
+    return _filterVisibleTransactions(transactions);
+  }
+
+  Future<DonationTransaction?> fetchTransaction(String transactionId) async {
+    final doc = await _firestore
+        .collection('transactions')
+        .doc(transactionId)
+        .get();
+    if (!doc.exists) {
+      return null;
+    }
+    return DonationTransaction.fromMap(doc.id, doc.data() ?? {});
+  }
+
+  Future<Map<String, String>> fetchUserNamesByIds(Set<String> userIds) async {
+    if (userIds.isEmpty) {
+      return {};
+    }
+
+    final ids = userIds.where((id) => id.trim().isNotEmpty).toList();
+    if (ids.isEmpty) {
+      return {};
+    }
+
+    final result = <String, String>{};
+    const chunkSize = 10;
+
+    for (var index = 0; index < ids.length; index += chunkSize) {
+      final end = index + chunkSize > ids.length
+          ? ids.length
+          : index + chunkSize;
+      final chunk = ids.sublist(index, end);
+      final snapshot = await _firestore
+          .collection('users')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final name = (data['name'] ?? '').toString().trim();
+        result[doc.id] = name.isEmpty ? doc.id : name;
+      }
+    }
+
+    return result;
+  }
+
+  Future<List<Expense>> fetchExpenses({DateTime? start, DateTime? end}) async {
+    Query<Map<String, dynamic>> query = _firestore.collection('expenses');
+
+    if (start != null) {
+      query = query.where('timestamp', isGreaterThanOrEqualTo: start);
+    }
+    if (end != null) {
+      query = query.where('timestamp', isLessThanOrEqualTo: end);
+    }
+
+    query = query.orderBy('timestamp', descending: true);
+
+    final snapshot = await query.get();
+    return snapshot.docs
+        .map((doc) => Expense.fromMap(doc.id, doc.data()))
         .toList();
   }
 

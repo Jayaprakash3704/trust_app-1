@@ -1,10 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.bannerMessage});
+
+  final String? bannerMessage;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -16,6 +19,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _busy = false;
   String? _error;
+  String? _bannerMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _bannerMessage = widget.bannerMessage;
+    if (kIsWeb) {
+      _completeWebRedirect();
+    }
+  }
 
   Widget _buildLogo() {
     return TweenAnimationBuilder<double>(
@@ -41,6 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _bannerMessage = null;
     });
 
     try {
@@ -63,6 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _bannerMessage = null;
     });
 
     try {
@@ -71,11 +86,8 @@ class _LoginScreenState extends State<LoginScreen> {
         linkPassword: _passwordController.text,
       );
     } on FirebaseAuthException catch (error) {
-      final message = error.code == 'account-exists-with-different-credential'
-          ? 'Account exists. Sign in with email/password to link Google.'
-          : 'Google sign-in failed.';
       setState(() {
-        _error = message;
+        _error = _googleAuthErrorMessage(error);
       });
     } catch (error) {
       setState(() {
@@ -85,6 +97,56 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _busy = false;
       });
+    }
+  }
+
+  Future<void> _completeWebRedirect() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    try {
+      await _authService.completeGoogleSignInRedirect(
+        linkEmail: _emailController.text.trim(),
+        linkPassword: _passwordController.text,
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = _googleAuthErrorMessage(error);
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = 'Google sign-in failed.';
+      });
+    } finally {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _busy = false;
+      });
+    }
+  }
+
+  String _googleAuthErrorMessage(FirebaseAuthException error) {
+    switch (error.code) {
+      case 'account-exists-with-different-credential':
+        return 'Account exists. Sign in with email/password to link Google.';
+      case 'operation-not-allowed':
+        return 'Google sign-in is disabled in Firebase Auth.';
+      case 'unauthorized-domain':
+        return 'This domain is not authorized for Google sign-in.';
+      case 'popup-blocked':
+        return 'Popup blocked. Allow popups and try again.';
+      default:
+        return 'Google sign-in failed.';
     }
   }
 
@@ -99,6 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _bannerMessage = null;
     });
 
     try {
@@ -164,15 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: SlideTransition(position: offset, child: child),
                     );
                   },
-                  child: _error == null
-                      ? const SizedBox.shrink()
-                      : Text(
-                          _error!,
-                          key: ValueKey(_error),
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
+                  child: _buildMessage(context),
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
@@ -198,6 +253,23 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMessage(BuildContext context) {
+    final message = _error ?? _bannerMessage;
+    if (message == null) {
+      return const SizedBox.shrink();
+    }
+    final isError = _error != null;
+    return Text(
+      message,
+      key: ValueKey(message),
+      style: TextStyle(
+        color: isError
+            ? Theme.of(context).colorScheme.error
+            : Theme.of(context).colorScheme.onSurfaceVariant,
       ),
     );
   }

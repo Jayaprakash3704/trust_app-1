@@ -26,6 +26,7 @@ Required for all deployments:
 - `PII_HASH_SECRET`: Secret used to hash PII (must be stable across deploys).
 - `RAZORPAY_KEY_ID`: Razorpay key id.
 - `RAZORPAY_KEY_SECRET`: Razorpay key secret.
+- `RAZORPAY_WEBHOOK_SECRET`: Razorpay webhook secret.
 
 Optional but recommended:
 

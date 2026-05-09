@@ -91,73 +91,7 @@ class MyApp extends StatelessWidget {
           },
         ),
       ),
-      builder: (context, child) {
-        return Stack(
-          children: [const _AppWatermark(), child ?? const SizedBox.shrink()],
-        );
-      },
       home: const AuthGate(),
-    );
-  }
-}
-
-class _AppWatermark extends StatefulWidget {
-  const _AppWatermark();
-
-  @override
-  State<_AppWatermark> createState() => _AppWatermarkState();
-}
-
-class _AppWatermarkState extends State<_AppWatermark>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2200),
-  )..repeat(reverse: true);
-
-  late final Animation<double> _scale = Tween<double>(
-    begin: 0.98,
-    end: 1.04,
-  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final baseSize = constraints.biggest.shortestSide * 0.6;
-          final dimension = baseSize.clamp(180.0, 420.0).toDouble();
-          return Center(
-            child: AnimatedBuilder(
-              animation: _scale,
-              builder: (context, child) {
-                return Opacity(
-                  opacity: 0.08,
-                  child: Transform.scale(scale: _scale.value, child: child),
-                );
-              },
-              child: ColorFiltered(
-                colorFilter: const ColorFilter.mode(
-                  Color(0xFF5FAE41),
-                  BlendMode.modulate,
-                ),
-                child: Image.asset(
-                  'assets/images/app_logo.png',
-                  width: dimension,
-                  height: dimension,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }

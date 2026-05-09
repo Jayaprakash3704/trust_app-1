@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../../core/models/app_user.dart';
 import '../../../services/admin_service.dart';
 
 class MemberFormScreen extends StatefulWidget {
-  const MemberFormScreen({super.key});
+  const MemberFormScreen({super.key, this.user});
+
+  final AppUser? user;
 
   @override
   State<MemberFormScreen> createState() => _MemberFormScreenState();
@@ -13,9 +18,17 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _adminService = AdminService();
   bool _busy = false;
+  String? _successMessage;
   String? _result;
   String? _error;
-  String _role = 'user';
+  String _countryCode = '+91';
+
+  static const List<Map<String, String>> _countryCodes = [
+    {'label': 'IN +91', 'value': '+91'},
+    {'label': 'US +1', 'value': '+1'},
+    {'label': 'UK +44', 'value': '+44'},
+    {'label': 'UAE +971', 'value': '+971'},
+  ];
 
   final _emailController = TextEditingController();
   final _nameController = TextEditingController();
@@ -23,6 +36,41 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
   final _addressController = TextEditingController();
   final _aadhaarController = TextEditingController();
   final _panController = TextEditingController();
+
+  bool get _isEdit => widget.user != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = widget.user;
+    if (user != null) {
+      _nameController.text = user.name;
+      _addressController.text = user.address;
+      _hydratePhone(user.phone);
+    }
+  }
+
+  void _hydratePhone(String phone) {
+    final trimmed = phone.trim();
+    if (trimmed.startsWith('+')) {
+      for (final entry in _countryCodes) {
+        final code = entry['value'] ?? '';
+        if (code.isNotEmpty && trimmed.startsWith(code)) {
+          _countryCode = code;
+          _phoneController.text = trimmed.substring(code.length);
+          return;
+        }
+      }
+    }
+
+    _phoneController.text = trimmed.replaceAll(RegExp(r'\D'), '');
+  }
+
+  InputDecoration _inputDecoration(String label, {String? helperText}) {
+    return const InputDecoration(
+      border: OutlineInputBorder(),
+    ).copyWith(labelText: label, helperText: helperText);
+  }
 
   Widget _buildStatus() {
     Widget child = const SizedBox.shrink();
@@ -33,10 +81,31 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
         style: TextStyle(color: Theme.of(context).colorScheme.error),
       );
     } else if (_result != null) {
-      child = SelectableText(
-        'Reset link: $_result',
+      child = Column(
         key: const ValueKey('result'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectableText('Reset link: $_result'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _shareResetLink,
+                icon: const Icon(Icons.share),
+                label: const Text('Share'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _copyResetLink,
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy'),
+              ),
+            ],
+          ),
+        ],
       );
+    } else if (_successMessage != null) {
+      child = Text(_successMessage!, key: const ValueKey('success'));
     }
 
     return AnimatedSwitcher(
@@ -64,25 +133,50 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
       _busy = true;
       _error = null;
       _result = null;
+      _successMessage = null;
     });
 
     try {
-      final response = await _adminService.createUser(
-        email: _emailController.text.trim(),
-        name: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        address: _addressController.text.trim(),
-        aadhaar: _aadhaarController.text.trim(),
-        pan: _panController.text.trim(),
-        role: _role,
-      );
+      final name = _nameController.text.trim();
+      final phone = '$_countryCode${_phoneController.text.trim()}';
+      final address = _addressController.text.trim();
+      final aadhaar = _aadhaarController.text.trim();
+      final pan = _panController.text.trim();
 
-      setState(() {
-        _result = response['passwordResetLink'] as String?;
-      });
+      if (_isEdit) {
+        await _adminService.updateUser(
+          userId: widget.user!.uid,
+          name: name,
+          phone: phone,
+          address: address,
+          aadhaar: aadhaar.isEmpty ? null : aadhaar,
+          pan: pan.isEmpty ? null : pan,
+        );
+        setState(() {
+          _successMessage = 'Member updated.';
+        });
+      } else {
+        final response = await _adminService.createUser(
+          email: _emailController.text.trim(),
+          name: name,
+          phone: phone,
+          address: address,
+          aadhaar: aadhaar,
+          pan: pan,
+        );
+        setState(() {
+          _result = response['passwordResetLink'] as String?;
+        });
+      }
     } catch (error) {
       setState(() {
-        _error = 'Could not create member.';
+        if (error is StateError) {
+          _error = error.message;
+        } else {
+          _error = _isEdit
+              ? 'Could not update member.'
+              : 'Could not create member.';
+        }
       });
     } finally {
       setState(() {
@@ -102,6 +196,28 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
     super.dispose();
   }
 
+  Future<void> _shareResetLink() async {
+    final link = _result;
+    if (link == null || link.isEmpty) {
+      return;
+    }
+    await Share.share('Password reset link:\n$link');
+  }
+
+  Future<void> _copyResetLink() async {
+    final link = _result;
+    if (link == null || link.isEmpty) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: link));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Reset link copied.')));
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -110,61 +226,137 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
         key: _formKey,
         child: Column(
           children: [
+            if (!_isEdit) ...[
+              TextFormField(
+                controller: _emailController,
+                decoration: _inputDecoration('Email'),
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Required';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Invalid email';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
             TextFormField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
+              controller: _nameController,
+              decoration: _inputDecoration('Name'),
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              validator: (value) =>
+                  value == null || value.isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: DropdownButtonFormField<String>(
+                    value: _countryCode,
+                    items: _countryCodes
+                        .map(
+                          (entry) => DropdownMenuItem<String>(
+                            value: entry['value'],
+                            child: Text(entry['label'] ?? ''),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _countryCode = value);
+                      }
+                    },
+                    decoration: _inputDecoration('Code'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _phoneController,
+                    decoration: _inputDecoration('Phone'),
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(15),
+                    ],
+                    validator: (value) {
+                      final trimmed = value?.trim() ?? '';
+                      if (trimmed.isEmpty) {
+                        return 'Required';
+                      }
+                      if (!RegExp(r'^\d{7,15}$').hasMatch(trimmed)) {
+                        return 'Invalid phone number';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _addressController,
+              decoration: _inputDecoration('Address'),
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              validator: (value) =>
+                  value == null || value.isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _aadhaarController,
+              decoration: _inputDecoration(
+                'Aadhaar',
+                helperText: _isEdit ? 'Leave blank to keep unchanged.' : null,
+              ),
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.next,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(12),
+              ],
               validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Required';
+                final trimmed = value?.trim() ?? '';
+                if (trimmed.isEmpty) {
+                  return _isEdit ? null : 'Required';
                 }
-                if (!value.contains('@')) {
-                  return 'Invalid email';
+                if (!RegExp(r'^\d{12}$').hasMatch(trimmed)) {
+                  return 'Aadhaar must be 12 digits';
                 }
                 return null;
               },
             ),
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
-              validator: (value) =>
-                  value == null || value.isEmpty ? 'Required' : null,
-            ),
-            TextFormField(
-              controller: _phoneController,
-              decoration: const InputDecoration(labelText: 'Phone'),
-              validator: (value) =>
-                  value == null || value.isEmpty ? 'Required' : null,
-            ),
-            TextFormField(
-              controller: _addressController,
-              decoration: const InputDecoration(labelText: 'Address'),
-              validator: (value) =>
-                  value == null || value.isEmpty ? 'Required' : null,
-            ),
-            TextFormField(
-              controller: _aadhaarController,
-              decoration: const InputDecoration(labelText: 'Aadhaar'),
-              validator: (value) =>
-                  value == null || value.isEmpty ? 'Required' : null,
-            ),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _panController,
-              decoration: const InputDecoration(labelText: 'PAN'),
-              validator: (value) =>
-                  value == null || value.isEmpty ? 'Required' : null,
-            ),
-            DropdownButtonFormField<String>(
-              initialValue: _role,
-              items: const [
-                DropdownMenuItem(value: 'user', child: Text('User')),
-                DropdownMenuItem(value: 'admin', child: Text('Admin')),
+              decoration: _inputDecoration(
+                'PAN',
+                helperText: _isEdit ? 'Leave blank to keep unchanged.' : null,
+              ),
+              textCapitalization: TextCapitalization.characters,
+              textInputAction: TextInputAction.done,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+                LengthLimitingTextInputFormatter(10),
+                UpperCaseTextFormatter(),
               ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _role = value);
+              validator: (value) {
+                final trimmed = value?.trim().toUpperCase() ?? '';
+                if (trimmed.isEmpty) {
+                  return _isEdit ? null : 'Required';
                 }
+                if (!RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$').hasMatch(trimmed)) {
+                  return 'PAN must be 5 letters, 4 numbers, 1 letter';
+                }
+                return null;
               },
-              decoration: const InputDecoration(labelText: 'Role'),
             ),
             const SizedBox(height: 16),
             _buildStatus(),
@@ -177,11 +369,21 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
                       width: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Create Member'),
+                  : Text(_isEdit ? 'Update Member' : 'Create Member'),
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return newValue.copyWith(text: newValue.text.toUpperCase());
   }
 }

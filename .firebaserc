@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "trust-app-a2a0e"
-  }
+    "default": "trust-app-a2a0e",
+    "trust-app": "trust-app-a2a0e"
+  },
+  "targets": {},
+  "etags": {}
 }

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { z } = require('zod');
 const { admin, getAuth, getDb } = require('../utils/firebase');
+const { sendPasswordResetEmail } = require('../utils/email');
 const {
   hashValue,
   last4,
@@ -14,9 +15,13 @@ const createUserSchema = z
     name: z.string().min(1),
     phone: z.string().min(1),
     address: z.string().min(1),
-    aadhaar: z.string().min(8),
-    pan: z.string().min(6),
-    role: z.enum(['admin', 'user']).default('user'),
+    aadhaar: z.string().regex(/^\d{12}$/, 'Aadhaar must be 12 digits'),
+    pan: z
+      .string()
+      .regex(
+        /^[A-Z]{5}[0-9]{4}[A-Z]$/,
+        'PAN must be 5 letters, 4 numbers, 1 letter',
+      ),
   })
   .strict();
 
@@ -25,9 +30,21 @@ const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().min(1).optional(),
   address: z.string().min(1).optional(),
-  aadhaar: z.string().min(8).optional(),
-  pan: z.string().min(6).optional(),
-  role: z.enum(['admin', 'user']).optional(),
+  aadhaar: z
+    .string()
+    .regex(/^\d{12}$/, 'Aadhaar must be 12 digits')
+    .optional(),
+  pan: z
+    .string()
+    .regex(
+      /^[A-Z]{5}[0-9]{4}[A-Z]$/,
+      'PAN must be 5 letters, 4 numbers, 1 letter',
+    )
+    .optional(),
+});
+
+const resetLinkSchema = z.object({
+  userId: z.string().min(1),
 });
 
 function generateTempPassword() {
@@ -53,10 +70,13 @@ function buildPiiPayload(aadhaar, pan) {
 async function createUser(req, res) {
   const parsed = createUserSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: 'Invalid user payload' });
+    return res
+      .status(400)
+      .json({ error: parsed.error.issues[0]?.message ?? 'Invalid user payload' });
   }
 
-  const { email, name, phone, address, aadhaar, pan, role } = parsed.data;
+  const { email, name, phone, address, aadhaar, pan } = parsed.data;
+  const role = 'user';
   let userRecord;
   let resetLink = null;
 
@@ -86,6 +106,18 @@ async function createUser(req, res) {
 
   resetLink = await getAuth().generatePasswordResetLink(email);
 
+  let emailResult = { sent: false };
+  try {
+    emailResult = await sendPasswordResetEmail({
+      to: email,
+      name,
+      resetLink,
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to send reset email:', error.message);
+  }
+
   await getAuth().setCustomUserClaims(userRecord.uid, { role });
 
   const db = getDb();
@@ -100,16 +132,19 @@ async function createUser(req, res) {
 
   return res.json({
     passwordResetLink: resetLink,
+    emailSent: emailResult.sent,
   });
 }
 
 async function updateUser(req, res) {
   const parsed = updateUserSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: 'Invalid update payload' });
+    return res
+      .status(400)
+      .json({ error: parsed.error.issues[0]?.message ?? 'Invalid update payload' });
   }
 
-  const { userId, aadhaar, pan, role, ...rest } = parsed.data;
+  const { userId, aadhaar, pan, ...rest } = parsed.data;
   const updatePayload = { ...rest };
 
   if (aadhaar || pan) {
@@ -118,18 +153,59 @@ async function updateUser(req, res) {
     Object.assign(updatePayload, buildPiiPayload(aadhaarValue, panValue));
   }
 
-  if (role) {
-    await getAuth().setCustomUserClaims(userId, { role });
-    updatePayload.role = role;
-  }
-
   const db = getDb();
   await db.collection('users').doc(userId).set(updatePayload, { merge: true });
 
   return res.json({ status: 'updated' });
 }
 
+async function createResetLink(req, res) {
+  const parsed = resetLinkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ error: parsed.error.issues[0]?.message ?? 'Invalid reset payload' });
+  }
+
+  const { userId } = parsed.data;
+
+  let userRecord;
+  try {
+    userRecord = await getAuth().getUser(userId);
+  } catch (error) {
+    if (error.code === 'auth/user-not-found') {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    throw error;
+  }
+
+  const email = userRecord.email;
+  if (!email) {
+    return res.status(400).json({ error: 'User does not have an email address.' });
+  }
+
+  const resetLink = await getAuth().generatePasswordResetLink(email);
+
+  let emailResult = { sent: false };
+  try {
+    emailResult = await sendPasswordResetEmail({
+      to: email,
+      name: userRecord.displayName || '',
+      resetLink,
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to send reset email:', error.message);
+  }
+
+  return res.json({
+    passwordResetLink: resetLink,
+    emailSent: emailResult.sent,
+  });
+}
+
 module.exports = {
   createUser,
   updateUser,
+  createResetLink,
 };

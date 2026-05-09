@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/auth_service.dart';
+import '../../../core/widgets/app_watermark.dart';
 import 'user_home_screen.dart';
 import '../payment/payment_screen.dart';
 import '../history/history_screen.dart';
@@ -62,9 +63,18 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _index,
-        children: const [UserHomeScreen(), PaymentScreen(), HistoryScreen()],
+      body: Stack(
+        children: [
+          const AppWatermark(),
+          IndexedStack(
+            index: _index,
+            children: const [
+              UserHomeScreen(),
+              PaymentScreen(),
+              HistoryScreen(),
+            ],
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/models/app_user.dart';
+import '../../../core/models/expense.dart';
 import '../../../core/models/transaction.dart';
 import '../../../core/utils/amount_formatter.dart';
 import '../../../core/utils/report_exporter.dart';
@@ -23,11 +24,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   bool _busy = false;
   String _filter = 'this_month';
+  String _reportType = 'transaction';
   DateTimeRange? _customRange;
   int _customYear = DateTime.now().year;
   String? _selectedUserId;
 
   List<DonationTransaction> _previewTransactions = [];
+  List<Expense> _previewExpenses = [];
+  List<MapEntry<String, int>> _previewExpenseCategoryTotals = [];
+  Map<String, String> _previewUserNames = {};
   DateTimeRange? _previewRange;
   String? _previewTitle;
   String? _previewRangeLabel;
@@ -35,14 +40,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
   int _previewTotalDonations = 0;
   int _previewTotalFees = 0;
   int _previewTotalPaid = 0;
+  int _previewTotalExpenses = 0;
 
   List<int> _yearOptions() {
     final current = DateTime.now().year;
     return List.generate(6, (index) => current - index);
   }
 
+  bool get _isExpenseReport => _reportType == 'expenses';
+  bool get _isDonationReport => _reportType == 'donation';
+
   void _resetPreviewState() {
     _previewTransactions = [];
+    _previewExpenses = [];
+    _previewExpenseCategoryTotals = [];
+    _previewUserNames = {};
     _previewRange = null;
     _previewTitle = null;
     _previewRangeLabel = null;
@@ -50,6 +62,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     _previewTotalDonations = 0;
     _previewTotalFees = 0;
     _previewTotalPaid = 0;
+    _previewTotalExpenses = 0;
   }
 
   Future<void> _pickCustomRange() async {
@@ -148,11 +161,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
         '${_fileDateFormat.format(range.end)}';
   }
 
-  String _buildExportTitle(DateTimeRange range, String? userId) {
+  String _buildExportTitle(
+    DateTimeRange range,
+    String? userId,
+    String reportType,
+  ) {
     final token = _rangeToken(range);
     final stamp = _timestampFormat.format(DateTime.now());
     final userToken = userId == null ? 'all' : 'user-$userId';
-    return 'report-$userToken-$token-$stamp';
+    return 'report-$reportType-$userToken-$token-$stamp';
   }
 
   Future<void> _generateReport() async {
@@ -164,8 +181,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return;
     }
 
-    final userId = _filter == 'individual' ? _selectedUserId : null;
-    if (_filter == 'individual' && userId == null) {
+    final usesUserFilter = !_isExpenseReport && _filter == 'individual';
+    final userId = usesUserFilter ? _selectedUserId : null;
+    if (usesUserFilter && userId == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Select a user first.')));
@@ -178,6 +196,62 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
 
     try {
+      if (_isExpenseReport) {
+        final expenses = await _firestoreService.fetchExpenses(
+          start: range.start,
+          end: range.end,
+        );
+
+        if (!mounted) {
+          return;
+        }
+
+        if (expenses.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No expenses for this report.')),
+          );
+          setState(() {
+            _resetPreviewState();
+          });
+          return;
+        }
+
+        final totalExpenses = expenses.fold<int>(
+          0,
+          (sum, expense) => sum + expense.amount,
+        );
+        final categoryTotals = <String, int>{};
+        for (final expense in expenses) {
+          final rawCategory = expense.category.trim();
+          final category = rawCategory.isEmpty ? 'Uncategorized' : rawCategory;
+          categoryTotals[category] =
+              (categoryTotals[category] ?? 0) + expense.amount;
+        }
+        final sortedCategoryTotals = categoryTotals.entries.toList()
+          ..sort((a, b) {
+            final byValue = b.value.compareTo(a.value);
+            if (byValue != 0) {
+              return byValue;
+            }
+            return a.key.compareTo(b.key);
+          });
+
+        final generatedAt = DateTime.now();
+        final rangeLabel = _formatRange(range);
+        final title = _buildExportTitle(range, null, _reportType);
+
+        setState(() {
+          _previewExpenses = expenses;
+          _previewExpenseCategoryTotals = sortedCategoryTotals;
+          _previewRange = range;
+          _previewRangeLabel = rangeLabel;
+          _previewGeneratedAt = generatedAt;
+          _previewTitle = title;
+          _previewTotalExpenses = totalExpenses;
+        });
+        return;
+      }
+
       final transactions = await _firestoreService.fetchTransactions(
         start: range.start,
         end: range.end,
@@ -190,9 +264,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
       }
 
       if (transactions.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No transactions for this report.')),
-        );
+        final emptyMessage = _isDonationReport
+            ? 'No donations for this report.'
+            : 'No transactions for this report.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(emptyMessage)));
         setState(() {
           _resetPreviewState();
         });
@@ -212,6 +289,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
         (sum, tx) => sum + tx.totalPaid,
       );
 
+      final userIds = transactions
+          .map((tx) => tx.userId)
+          .where((id) => id.trim().isNotEmpty)
+          .toSet();
+      final userNames = await _firestoreService.fetchUserNamesByIds(userIds);
+
       if (_filter == 'this_year' || _filter == 'custom_year') {
         final totalUsers = await _firestoreService.fetchUserCount();
         await _firestoreService.createReport(
@@ -223,10 +306,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       final generatedAt = DateTime.now();
       final rangeLabel = _formatRange(range);
-      final title = _buildExportTitle(range, userId);
+      final title = _buildExportTitle(range, userId, _reportType);
 
       setState(() {
         _previewTransactions = transactions;
+        _previewUserNames = userNames;
         _previewRange = range;
         _previewRangeLabel = rangeLabel;
         _previewGeneratedAt = generatedAt;
@@ -256,7 +340,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _exportPreview(bool pdf) async {
-    if (_previewTransactions.isEmpty ||
+    final hasPreview = _isExpenseReport
+        ? _previewExpenses.isNotEmpty
+        : _previewTransactions.isNotEmpty;
+
+    if (!hasPreview ||
         _previewTitle == null ||
         _previewRangeLabel == null ||
         _previewGeneratedAt == null) {
@@ -271,23 +359,63 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
 
     try {
-      if (pdf) {
-        await shareTransactionsPdf(
-          title: _previewTitle!,
-          transactions: _previewTransactions,
-          totalDonations: _previewTotalDonations,
-          totalFees: _previewTotalFees,
-          totalPaid: _previewTotalPaid,
-          rangeLabel: _previewRangeLabel,
-          generatedAt: _previewGeneratedAt,
-        );
+      if (_isExpenseReport) {
+        if (pdf) {
+          await shareExpensesPdf(
+            title: _previewTitle!,
+            expenses: _previewExpenses,
+            totalExpenses: _previewTotalExpenses,
+            rangeLabel: _previewRangeLabel,
+            generatedAt: _previewGeneratedAt,
+          );
+        } else {
+          await shareExpensesCsv(
+            title: _previewTitle!,
+            expenses: _previewExpenses,
+            rangeLabel: _previewRangeLabel,
+            generatedAt: _previewGeneratedAt,
+          );
+        }
+      } else if (_isDonationReport) {
+        if (pdf) {
+          await shareDonationsPdf(
+            title: _previewTitle!,
+            transactions: _previewTransactions,
+            totalDonations: _previewTotalDonations,
+            userNames: _previewUserNames,
+            rangeLabel: _previewRangeLabel,
+            generatedAt: _previewGeneratedAt,
+          );
+        } else {
+          await shareDonationsCsv(
+            title: _previewTitle!,
+            transactions: _previewTransactions,
+            userNames: _previewUserNames,
+            rangeLabel: _previewRangeLabel,
+            generatedAt: _previewGeneratedAt,
+          );
+        }
       } else {
-        await shareTransactionsCsv(
-          title: _previewTitle!,
-          transactions: _previewTransactions,
-          rangeLabel: _previewRangeLabel,
-          generatedAt: _previewGeneratedAt,
-        );
+        if (pdf) {
+          await shareTransactionsPdf(
+            title: _previewTitle!,
+            transactions: _previewTransactions,
+            totalDonations: _previewTotalDonations,
+            totalFees: _previewTotalFees,
+            totalPaid: _previewTotalPaid,
+            userNames: _previewUserNames,
+            rangeLabel: _previewRangeLabel,
+            generatedAt: _previewGeneratedAt,
+          );
+        } else {
+          await shareTransactionsCsv(
+            title: _previewTitle!,
+            transactions: _previewTransactions,
+            userNames: _previewUserNames,
+            rangeLabel: _previewRangeLabel,
+            generatedAt: _previewGeneratedAt,
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -306,6 +434,37 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Widget _buildPreviewList() {
+    if (_isExpenseReport) {
+      final previewItems = _previewExpenses.take(10).toList();
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_previewExpenses.length > previewItems.length)
+            Text(
+              'Showing ${previewItems.length} of '
+              '${_previewExpenses.length} expenses',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          const SizedBox(height: 8),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: previewItems.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final expense = previewItems[index];
+              return ListTile(
+                title: Text(formatInr(expense.amount)),
+                subtitle: Text('${expense.category} • ${expense.description}'),
+                trailing: Text(_formatTxDate(expense.timestamp)),
+              );
+            },
+          ),
+        ],
+      );
+    }
+
     final previewItems = _previewTransactions.take(10).toList();
     final showUserId = _filter != 'individual';
 
@@ -315,7 +474,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
         if (_previewTransactions.length > previewItems.length)
           Text(
             'Showing ${previewItems.length} of '
-            '${_previewTransactions.length} transactions',
+            '${_previewTransactions.length} '
+            '${_isDonationReport ? 'donations' : 'transactions'}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         const SizedBox(height: 8),
@@ -326,12 +486,42 @@ class _ReportsScreenState extends State<ReportsScreen> {
           separatorBuilder: (context, index) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final tx = previewItems[index];
+            final name = _previewUserNames[tx.userId] ?? tx.userId;
             final subtitle = showUserId
-                ? '${_formatTxDate(tx.timestamp)} • ${tx.status} • ${tx.userId}'
+              ? '${_formatTxDate(tx.timestamp)} • ${tx.status} • $name'
                 : '${_formatTxDate(tx.timestamp)} • ${tx.status}';
+            final amount = _isDonationReport ? tx.donationAmount : tx.totalPaid;
             return ListTile(
-              title: Text(formatInr(tx.totalPaid)),
+              title: Text(formatInr(amount)),
               subtitle: Text(subtitle),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExpenseCategoryBreakdown() {
+    if (!_isExpenseReport || _previewExpenseCategoryTotals.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Category totals', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _previewExpenseCategoryTotals.length,
+          separatorBuilder: (context, index) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final entry = _previewExpenseCategoryTotals[index];
+            return ListTile(
+              dense: true,
+              title: Text(entry.key),
+              trailing: Text(formatInr(entry.value)),
             );
           },
         ),
@@ -342,103 +532,116 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Widget _buildPreviewSection() {
     return Container(
       key: const ValueKey('preview'),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Opacity(
-                opacity: 0.08,
-                child: Center(
-                  child: ColorFiltered(
-                    colorFilter: const ColorFilter.mode(
-                      Color(0xFF5FAE41),
-                      BlendMode.modulate,
-                    ),
-                    child: Image.asset(
-                      'assets/images/app_logo.png',
-                      width: 220,
-                      height: 220,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Row(
-                children: [
-                  Image.asset(
-                    'assets/images/app_logo.png',
-                    width: 20,
-                    height: 20,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Preview',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ],
+              Image.asset(
+                'assets/images/app_logo.png',
+                width: 20,
+                height: 20,
+                fit: BoxFit.contain,
               ),
-              const SizedBox(height: 8),
-              if (_previewRangeLabel != null)
-                Text('Range: $_previewRangeLabel'),
-              if (_previewGeneratedAt != null)
-                Text(
-                  'Generated: ${_previewDateTimeFormat.format(_previewGeneratedAt!)}',
-                ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _PreviewStat(
-                    label: 'Total donations',
-                    value: formatInr(_previewTotalDonations),
-                  ),
-                  _PreviewStat(
-                    label: 'Total fees',
-                    value: formatInr(_previewTotalFees),
-                  ),
-                  _PreviewStat(
-                    label: 'Total paid',
-                    value: formatInr(_previewTotalPaid),
-                  ),
-                  _PreviewStat(
-                    label: 'Transactions',
-                    value: _previewTransactions.length.toString(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  FilledButton(
-                    onPressed: _busy ? null : () => _exportPreview(true),
-                    child: const Text('Export PDF'),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton(
-                    onPressed: _busy ? null : () => _exportPreview(false),
-                    child: const Text('Export CSV'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildPreviewList(),
+              const SizedBox(width: 8),
+              Text('Preview', style: Theme.of(context).textTheme.titleMedium),
             ],
           ),
+          const SizedBox(height: 8),
+          if (_previewRangeLabel != null) Text('Range: $_previewRangeLabel'),
+          if (_previewGeneratedAt != null)
+            Text(
+              'Generated: ${_previewDateTimeFormat.format(_previewGeneratedAt!)}',
+            ),
+          const SizedBox(height: 12),
+          Wrap(spacing: 12, runSpacing: 12, children: _buildPreviewStats()),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              FilledButton(
+                onPressed: _busy ? null : () => _exportPreview(true),
+                child: const Text('Export PDF'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: _busy ? null : () => _exportPreview(false),
+                child: const Text('Export CSV'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_isExpenseReport) ...[
+            _buildExpenseCategoryBreakdown(),
+            const SizedBox(height: 16),
+          ],
+          _buildPreviewList(),
         ],
       ),
     );
   }
 
+  List<Widget> _buildPreviewStats() {
+    if (_isExpenseReport) {
+      return [
+        _PreviewStat(
+          label: 'Total expenses',
+          value: formatInr(_previewTotalExpenses),
+        ),
+        _PreviewStat(
+          label: 'Expenses',
+          value: _previewExpenses.length.toString(),
+        ),
+      ];
+    }
+
+    if (_isDonationReport) {
+      return [
+        _PreviewStat(
+          label: 'Total donations',
+          value: formatInr(_previewTotalDonations),
+        ),
+        _PreviewStat(
+          label: 'Donations',
+          value: _previewTransactions.length.toString(),
+        ),
+      ];
+    }
+
+    return [
+      _PreviewStat(
+        label: 'Total donations',
+        value: formatInr(_previewTotalDonations),
+      ),
+      _PreviewStat(label: 'Total fees', value: formatInr(_previewTotalFees)),
+      _PreviewStat(label: 'Total paid', value: formatInr(_previewTotalPaid)),
+      _PreviewStat(
+        label: 'Transactions',
+        value: _previewTransactions.length.toString(),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hasPreview = _previewTransactions.isNotEmpty && _previewRange != null;
+    final hasPreview =
+        _previewRange != null &&
+        (_isExpenseReport
+            ? _previewExpenses.isNotEmpty
+            : _previewTransactions.isNotEmpty);
+
+    final filterItems = <DropdownMenuItem<String>>[
+      if (!_isExpenseReport)
+        const DropdownMenuItem(value: 'individual', child: Text('Individual')),
+      const DropdownMenuItem(value: 'this_year', child: Text('This year')),
+      const DropdownMenuItem(value: 'custom_year', child: Text('Custom year')),
+      const DropdownMenuItem(value: 'this_month', child: Text('This month')),
+      const DropdownMenuItem(value: 'today', child: Text('Today')),
+      const DropdownMenuItem(value: 'yesterday', child: Text('Yesterday')),
+      const DropdownMenuItem(
+        value: 'custom_range',
+        child: Text('Custom range'),
+      ),
+    ];
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -449,29 +652,46 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Text('Reports', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              key: ValueKey(_filter),
-              initialValue: _filter,
+              key: ValueKey(_reportType),
+              initialValue: _reportType,
               items: const [
                 DropdownMenuItem(
-                  value: 'individual',
-                  child: Text('Individual'),
-                ),
-                DropdownMenuItem(value: 'this_year', child: Text('This year')),
-                DropdownMenuItem(
-                  value: 'custom_year',
-                  child: Text('Custom year'),
+                  value: 'donation',
+                  child: Text('Donation report'),
                 ),
                 DropdownMenuItem(
-                  value: 'this_month',
-                  child: Text('This month'),
+                  value: 'transaction',
+                  child: Text('Transaction report'),
                 ),
-                DropdownMenuItem(value: 'today', child: Text('Today')),
-                DropdownMenuItem(value: 'yesterday', child: Text('Yesterday')),
                 DropdownMenuItem(
-                  value: 'custom_range',
-                  child: Text('Custom range'),
+                  value: 'expenses',
+                  child: Text('Expenses report'),
                 ),
               ],
+              onChanged: _busy
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        setState(() {
+                          _reportType = value;
+                          if (_isExpenseReport && _filter == 'individual') {
+                            _filter = 'this_month';
+                            _selectedUserId = null;
+                          }
+                          _resetPreviewState();
+                        });
+                      }
+                    },
+              decoration: const InputDecoration(
+                labelText: 'Report type',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              key: ValueKey(_filter),
+              initialValue: _filter,
+              items: filterItems,
               onChanged: _busy
                   ? null
                   : (value) {
@@ -529,7 +749,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
               ),
             if (_filter == 'custom_range') const SizedBox(height: 12),
-            if (_filter == 'individual')
+            if (!_isExpenseReport && _filter == 'individual')
               StreamBuilder<List<AppUser>>(
                 stream: _firestoreService.watchUsers(),
                 builder: (context, snapshot) {
@@ -582,7 +802,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   );
                 },
               ),
-            if (_filter == 'individual') const SizedBox(height: 12),
+            if (!_isExpenseReport && _filter == 'individual')
+              const SizedBox(height: 12),
             FilledButton(
               onPressed: _busy ? null : _generateReport,
               child: _busy

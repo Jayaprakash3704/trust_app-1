@@ -18,7 +18,9 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly([
         'name',
         'phone',
-        'address'
+        'address',
+        'monthlyBasicAmount',
+        'monthlyBasicDay'
       ]);
     }
 
@@ -32,6 +34,18 @@ service cloud.firestore {
     match /transactions/{transactionId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow write: if false;
+    }
+
+    match /payment_idempotency/{id} {
+      allow read, write: if false;
+    }
+
+    match /payment_ids/{id} {
+      allow read, write: if false;
+    }
+
+    match /webhook_events/{id} {
+      allow read, write: if false;
     }
 
     match /reports/{reportId} {

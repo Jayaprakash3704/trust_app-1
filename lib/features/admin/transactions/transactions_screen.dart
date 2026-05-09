@@ -54,7 +54,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 value: _statusFilter,
                 items: const [
                   DropdownMenuItem(value: 'all', child: Text('All')),
-                  DropdownMenuItem(value: 'created', child: Text('Created')),
                   DropdownMenuItem(value: 'success', child: Text('Success')),
                   DropdownMenuItem(value: 'failed', child: Text('Failed')),
                 ],
