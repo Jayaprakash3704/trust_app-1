@@ -16,10 +16,7 @@ class RazorpayWebCheckout {
 
     JSFunction? razorpayConstructor;
     try {
-      final constructorAny = globalContext['Razorpay'];
-      if (constructorAny is JSFunction) {
-        razorpayConstructor = constructorAny;
-      }
+      razorpayConstructor = globalContext['Razorpay'] as JSFunction?;
     } catch (_) {
       razorpayConstructor = null;
     }

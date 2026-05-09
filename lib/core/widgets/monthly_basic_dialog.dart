@@ -52,7 +52,7 @@ Future<MonthlyBasicConfig?> showMonthlyBasicDialog(
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
-              value: selectedDay,
+              initialValue: selectedDay,
               decoration: const InputDecoration(
                 labelText: 'Due day of month',
                 border: OutlineInputBorder(),

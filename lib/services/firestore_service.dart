@@ -10,12 +10,6 @@ class FirestoreService {
 
   final FirebaseFirestore _firestore;
 
-  List<DonationTransaction> _filterVisibleTransactions(
-    List<DonationTransaction> transactions,
-  ) {
-    return transactions.where((tx) => tx.status != 'created').toList();
-  }
-
   Stream<AppUser?> watchUser(String uid) {
     return _firestore.collection('users').doc(uid).snapshots().map((doc) {
       if (!doc.exists) {
@@ -51,10 +45,9 @@ class FirestoreService {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-          final transactions = snapshot.docs
+          return snapshot.docs
               .map((doc) => DonationTransaction.fromMap(doc.id, doc.data()))
               .toList();
-          return _filterVisibleTransactions(transactions);
         });
   }
 
@@ -64,10 +57,9 @@ class FirestoreService {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-          final transactions = snapshot.docs
+          return snapshot.docs
               .map((doc) => DonationTransaction.fromMap(doc.id, doc.data()))
               .toList();
-          return _filterVisibleTransactions(transactions);
         });
   }
 
@@ -120,10 +112,9 @@ class FirestoreService {
     query = query.orderBy('timestamp', descending: true);
 
     final snapshot = await query.get();
-    final transactions = snapshot.docs
+    return snapshot.docs
         .map((doc) => DonationTransaction.fromMap(doc.id, doc.data()))
         .toList();
-    return _filterVisibleTransactions(transactions);
   }
 
   Future<DonationTransaction?> fetchTransaction(String transactionId) async {

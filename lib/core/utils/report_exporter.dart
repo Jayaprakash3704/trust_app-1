@@ -11,7 +11,6 @@ import '../models/expense.dart';
 import '../models/transaction.dart';
 
 final _currency = NumberFormat.currency(locale: 'en_IN', symbol: 'Rs. ');
-final _dateFormat = DateFormat('dd MMM yyyy');
 final _dateTimeFormat = DateFormat('dd MMM yyyy HH:mm');
 
 String _formatCurrency(int amountPaise) {

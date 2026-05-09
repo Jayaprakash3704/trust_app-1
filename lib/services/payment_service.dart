@@ -19,16 +19,17 @@ class PaymentService {
       throw StateError('User not signed in');
     }
 
+    final extraPayload = clientRequestId == null
+        ? null
+        : <String, dynamic>{'clientRequestId': clientRequestId};
+
     final response = await http.post(
       Uri.parse('${AppConfig.backendBaseUrl}/payment/create-order'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({
-        'donationAmount': donationAmount,
-        if (clientRequestId != null) 'clientRequestId': clientRequestId,
-      }),
+      body: jsonEncode({'donationAmount': donationAmount, ...?extraPayload}),
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {

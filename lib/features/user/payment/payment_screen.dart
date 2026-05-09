@@ -210,6 +210,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
 
     final appUser = await _firestoreService.fetchUser(currentUser.uid);
+    if (!mounted) {
+      return;
+    }
     final today = DateTime.now().day;
     final defaultDay = today < 1 ? 1 : (today > 28 ? 28 : today);
     final initial = MonthlyBasicConfig(
@@ -218,6 +221,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
 
     final result = await showMonthlyBasicDialog(context, initial: initial);
+    if (!mounted) {
+      return;
+    }
     if (result == null) {
       return;
     }

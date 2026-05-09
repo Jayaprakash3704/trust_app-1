@@ -258,7 +258,7 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
                 SizedBox(
                   width: 120,
                   child: DropdownButtonFormField<String>(
-                    value: _countryCode,
+                    initialValue: _countryCode,
                     items: _countryCodes
                         .map(
                           (entry) => DropdownMenuItem<String>(

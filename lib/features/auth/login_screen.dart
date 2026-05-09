@@ -126,12 +126,11 @@ class _LoginScreenState extends State<LoginScreen> {
         _error = 'Google sign-in failed.';
       });
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
       }
-      setState(() {
-        _busy = false;
-      });
     }
   }
 
