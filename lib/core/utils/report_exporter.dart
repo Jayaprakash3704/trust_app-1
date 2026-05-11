@@ -170,7 +170,9 @@ Future<void> shareTransactionsCsv({
   final file = File('${dir.path}/$title.csv');
   await file.writeAsString(buffer.toString());
 
-  await Share.shareXFiles([XFile(file.path)], text: title);
+  await SharePlus.instance.share(
+    ShareParams(files: [XFile(file.path)], text: title),
+  );
 }
 
 Future<void> shareDonationsPdf({
@@ -263,7 +265,9 @@ Future<void> shareDonationsCsv({
   final file = File('${dir.path}/$title.csv');
   await file.writeAsString(buffer.toString());
 
-  await Share.shareXFiles([XFile(file.path)], text: title);
+  await SharePlus.instance.share(
+    ShareParams(files: [XFile(file.path)], text: title),
+  );
 }
 
 Future<void> shareExpensesPdf({
@@ -383,5 +387,7 @@ Future<void> shareExpensesCsv({
   final file = File('${dir.path}/$title.csv');
   await file.writeAsString(buffer.toString());
 
-  await Share.shareXFiles([XFile(file.path)], text: title);
+  await SharePlus.instance.share(
+    ShareParams(files: [XFile(file.path)], text: title),
+  );
 }

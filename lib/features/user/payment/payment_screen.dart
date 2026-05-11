@@ -11,6 +11,7 @@ import '../../../core/utils/amount_formatter.dart';
 import '../../../core/widgets/donation_receipt_dialog.dart';
 import '../../../core/widgets/monthly_basic_dialog.dart';
 import '../../../core/utils/receipt_exporter.dart';
+import '../../../services/backend_warmup.dart';
 import '../../../services/firestore_service.dart';
 import '../../../services/payment_service.dart';
 import '../../../services/razorpay_web_service.dart';
@@ -30,6 +31,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final _uuid = const Uuid();
   Razorpay? _razorpay;
   bool _busy = false;
+  bool _warming = false;
+  bool _backendReady = false;
+  String? _warmupError;
   Timer? _debounce;
   Map<String, dynamic>? _preparedOrder;
   int? _preparedAmount;
@@ -47,7 +51,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       _razorpay?.on(Razorpay.EVENT_PAYMENT_ERROR, _handleError);
       _razorpay?.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
     }
-    _paymentService.warmUp().catchError((_) {});
+    _warmUpBackend();
   }
 
   @override
@@ -97,6 +101,42 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _currentOrderId = null;
     _currentClientRequestId = null;
     _lastPrepareError = null;
+  }
+
+  Future<void> _warmUpBackend({bool force = false}) async {
+    if (_warming) {
+      return;
+    }
+
+    setState(() {
+      _warming = true;
+      _warmupError = null;
+    });
+
+    try {
+      await BackendWarmup.instance.ensureWarm(force: force);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _backendReady = true;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _backendReady = false;
+        _warmupError = _formatError(error);
+      });
+    } finally {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _warming = false;
+      });
+    }
   }
 
   Future<void> _completePayment({
@@ -279,6 +319,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _startPayment() async {
+    if (_warming) {
+      return;
+    }
+
+    if (!_backendReady) {
+      await _warmUpBackend();
+      if (!_backendReady) {
+        _showError(
+          _warmupError ?? 'Backend is still starting. Please try again.',
+        );
+        return;
+      }
+    }
+
     final donationAmount = _parseDonationAmount();
     if (donationAmount <= 0) {
       _showError('Enter a valid amount');
@@ -388,7 +442,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final donationAmount = _parseDonationAmount();
     final fee = donationAmount > 0 ? FeeRules.platformFee(donationAmount) : 0;
     final totalPaid = donationAmount + fee;
-
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -416,7 +469,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Text('Total payable: ${formatInr(totalPaid)}'),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: _busy ? null : _startPayment,
+            onPressed: (_busy || _warming || _warmupError != null)
+                ? null
+                : _startPayment,
             child: _busy
                 ? const SizedBox(
                     height: 18,

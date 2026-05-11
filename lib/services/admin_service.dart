@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/constants/app_config.dart';
+import 'backend_warmup.dart';
 
 class AdminService {
   AdminService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseAuth _auth;
+  static const Duration _requestTimeout = Duration(seconds: 20);
 
   void _assertBackendConfigured() {
     if (AppConfig.backendBaseUrl.contains('your-render-service.onrender.com')) {
@@ -33,26 +36,31 @@ class AdminService {
     required String pan,
   }) async {
     _assertBackendConfigured();
+    await BackendWarmup.instance.ensureWarm();
 
     final token = await _requireToken();
 
     http.Response response;
     try {
-      response = await http.post(
-        Uri.parse('${AppConfig.backendBaseUrl}/admin/create-user'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'email': email,
-          'name': name,
-          'phone': phone,
-          'address': address,
-          'aadhaar': aadhaar,
-          'pan': pan,
-        }),
-      );
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.backendBaseUrl}/admin/create-user'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'email': email,
+              'name': name,
+              'phone': phone,
+              'address': address,
+              'aadhaar': aadhaar,
+              'pan': pan,
+            }),
+          )
+          .timeout(_requestTimeout);
+    } on TimeoutException {
+      throw StateError('Backend request timed out. Please try again.');
     } on http.ClientException {
       throw StateError('Backend unreachable. Check BACKEND_BASE_URL or CORS.');
     } catch (_) {
@@ -88,6 +96,7 @@ class AdminService {
     String? pan,
   }) async {
     _assertBackendConfigured();
+    await BackendWarmup.instance.ensureWarm();
 
     final token = await _requireToken();
 
@@ -102,14 +111,18 @@ class AdminService {
 
     http.Response response;
     try {
-      response = await http.post(
-        Uri.parse('${AppConfig.backendBaseUrl}/admin/update-user'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(payload),
-      );
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.backendBaseUrl}/admin/update-user'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(payload),
+          )
+          .timeout(_requestTimeout);
+    } on TimeoutException {
+      throw StateError('Backend request timed out. Please try again.');
     } on http.ClientException {
       throw StateError('Backend unreachable. Check BACKEND_BASE_URL or CORS.');
     } catch (_) {
@@ -136,19 +149,24 @@ class AdminService {
 
   Future<String> createPasswordResetLink({required String userId}) async {
     _assertBackendConfigured();
+    await BackendWarmup.instance.ensureWarm();
 
     final token = await _requireToken();
 
     http.Response response;
     try {
-      response = await http.post(
-        Uri.parse('${AppConfig.backendBaseUrl}/admin/reset-link'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'userId': userId}),
-      );
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.backendBaseUrl}/admin/reset-link'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'userId': userId}),
+          )
+          .timeout(_requestTimeout);
+    } on TimeoutException {
+      throw StateError('Backend request timed out. Please try again.');
     } on http.ClientException {
       throw StateError('Backend unreachable. Check BACKEND_BASE_URL or CORS.');
     } catch (_) {

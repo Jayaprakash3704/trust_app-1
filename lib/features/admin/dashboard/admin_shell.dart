@@ -5,6 +5,7 @@ import '../reports/reports_screen.dart';
 import '../transactions/transactions_screen.dart';
 import '../expenses/expenses_screen.dart';
 import '../../../core/widgets/app_watermark.dart';
+import '../../../core/widgets/backend_status_indicator.dart';
 import '../../../services/auth_service.dart';
 import 'admin_dashboard_screen.dart';
 
@@ -24,6 +25,10 @@ class _AdminShellState extends State<AdminShell> {
       appBar: AppBar(
         title: const Text('Admin Console'),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: BackendStatusIndicator(),
+          ),
           IconButton(
             onPressed: () => AuthService().signOut(),
             icon: const Icon(Icons.logout),

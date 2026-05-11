@@ -4,16 +4,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/constants/app_config.dart';
+import 'backend_warmup.dart';
 
 class PaymentService {
   PaymentService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseAuth _auth;
+  static const Duration _requestTimeout = Duration(seconds: 20);
 
   Future<Map<String, dynamic>> createOrder({
     required int donationAmount,
     String? clientRequestId,
   }) async {
+    await BackendWarmup.instance.ensureWarm();
+
     final token = await _auth.currentUser?.getIdToken();
     if (token == null) {
       throw StateError('User not signed in');
@@ -23,14 +27,19 @@ class PaymentService {
         ? null
         : <String, dynamic>{'clientRequestId': clientRequestId};
 
-    final response = await http.post(
-      Uri.parse('${AppConfig.backendBaseUrl}/payment/create-order'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({'donationAmount': donationAmount, ...?extraPayload}),
-    );
+    final response = await http
+        .post(
+          Uri.parse('${AppConfig.backendBaseUrl}/payment/create-order'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'donationAmount': donationAmount,
+            ...?extraPayload,
+          }),
+        )
+        .timeout(_requestTimeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('Create order failed: ${response.body}');
@@ -40,7 +49,7 @@ class PaymentService {
   }
 
   Future<void> warmUp() async {
-    await http.get(Uri.parse('${AppConfig.backendBaseUrl}/health'));
+    await BackendWarmup.instance.ensureWarm();
   }
 
   Future<String> verifyPayment({
@@ -49,24 +58,28 @@ class PaymentService {
     required String razorpayPaymentId,
     required String razorpaySignature,
   }) async {
+    await BackendWarmup.instance.ensureWarm();
+
     final token = await _auth.currentUser?.getIdToken();
     if (token == null) {
       throw StateError('User not signed in');
     }
 
-    final response = await http.post(
-      Uri.parse('${AppConfig.backendBaseUrl}/payment/verify-payment'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'transactionId': transactionId,
-        'razorpay_order_id': razorpayOrderId,
-        'razorpay_payment_id': razorpayPaymentId,
-        'razorpay_signature': razorpaySignature,
-      }),
-    );
+    final response = await http
+        .post(
+          Uri.parse('${AppConfig.backendBaseUrl}/payment/verify-payment'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'transactionId': transactionId,
+            'razorpay_order_id': razorpayOrderId,
+            'razorpay_payment_id': razorpayPaymentId,
+            'razorpay_signature': razorpaySignature,
+          }),
+        )
+        .timeout(_requestTimeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('Verify payment failed: ${response.body}');
@@ -85,19 +98,23 @@ class PaymentService {
   }
 
   Future<void> markPaymentFailed({required String transactionId}) async {
+    await BackendWarmup.instance.ensureWarm();
+
     final token = await _auth.currentUser?.getIdToken();
     if (token == null) {
       throw StateError('User not signed in');
     }
 
-    final response = await http.post(
-      Uri.parse('${AppConfig.backendBaseUrl}/payment/payment-failed'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({'transactionId': transactionId}),
-    );
+    final response = await http
+        .post(
+          Uri.parse('${AppConfig.backendBaseUrl}/payment/payment-failed'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'transactionId': transactionId}),
+        )
+        .timeout(_requestTimeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('Payment failed update error: ${response.body}');

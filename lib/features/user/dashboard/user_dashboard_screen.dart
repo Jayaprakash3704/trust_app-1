@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/auth_service.dart';
 import '../../../core/widgets/app_watermark.dart';
+import '../../../core/widgets/backend_status_indicator.dart';
 import 'user_home_screen.dart';
 import '../payment/payment_screen.dart';
 import '../history/history_screen.dart';
@@ -57,6 +58,10 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
       appBar: AppBar(
         title: _buildTitle(context),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: BackendStatusIndicator(),
+          ),
           IconButton(
             onPressed: () => AuthService().signOut(),
             icon: const Icon(Icons.logout),
@@ -68,10 +73,10 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
           const AppWatermark(),
           IndexedStack(
             index: _index,
-            children: const [
-              UserHomeScreen(),
-              PaymentScreen(),
-              HistoryScreen(),
+            children: [
+              UserHomeScreen(onDonateTap: () => setState(() => _index = 1)),
+              const PaymentScreen(),
+              const HistoryScreen(),
             ],
           ),
         ],

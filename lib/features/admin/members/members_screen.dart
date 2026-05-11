@@ -57,7 +57,9 @@ class MembersScreen extends StatelessWidget {
       }
       messenger.hideCurrentSnackBar();
       final label = user.name.isNotEmpty ? user.name : user.uid;
-      await Share.share('Password reset link for $label:\n$link');
+      await SharePlus.instance.share(
+        ShareParams(text: 'Password reset link for $label:\n$link'),
+      );
     } catch (error) {
       if (!context.mounted) {
         return;

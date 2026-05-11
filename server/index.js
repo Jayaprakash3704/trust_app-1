@@ -12,6 +12,7 @@ dotenv.config();
 initFirebaseAdmin();
 
 const app = express();
+const serverStartedAt = new Date();
 const adminUiPath = path.join(__dirname, 'admin-ui');
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
@@ -53,7 +54,11 @@ app.use(
 );
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({
+    status: 'ok',
+    startedAt: serverStartedAt.toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
 });
 
 app.use('/admin', express.static(adminUiPath, { index: 'index.html' }));

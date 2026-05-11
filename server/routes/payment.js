@@ -12,6 +12,6 @@ const router = express.Router();
 router.post('/create-order', requireAuth, createOrder);
 router.post('/verify-payment', requireAuth, verifyPayment);
 router.post('/payment-failed', requireAuth, markPaymentFailed);
-router.post('/webhook', handleWebhook);
+router.post(/^\/webhook(\/.*)?$/, handleWebhook);
 
 module.exports = router;

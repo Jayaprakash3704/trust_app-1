@@ -201,7 +201,9 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
     if (link == null || link.isEmpty) {
       return;
     }
-    await Share.share('Password reset link:\n$link');
+    await SharePlus.instance.share(
+      ShareParams(text: 'Password reset link:\n$link'),
+    );
   }
 
   Future<void> _copyResetLink() async {
