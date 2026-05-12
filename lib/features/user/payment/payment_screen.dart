@@ -268,11 +268,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
-    await _firestoreService.updateUserMonthlyBasic(
-      uid: currentUser.uid,
-      amountPaise: result.amountPaise,
-      dayOfMonth: result.dayOfMonth,
-    );
+    try {
+      await _firestoreService.updateUserMonthlyBasic(
+        uid: currentUser.uid,
+        amountPaise: result.amountPaise,
+        dayOfMonth: result.dayOfMonth,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save monthly basic.')),
+      );
+      return;
+    }
 
     if (!mounted) {
       return;
